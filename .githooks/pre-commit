@@ -1,0 +1,5 @@
+#!/bin/sh
+# Blocks commits whose staged changes look like they contain a secret.
+# Enabled by `npm install` (core.hooksPath); the scanner lives with the Claude
+# Code hooks so both use the same patterns. See README.md.
+exec node .claude/hooks/secret-scan.mjs --staged

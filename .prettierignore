@@ -1,0 +1,10 @@
+# Docs and agent configuration are hand-formatted; Prettier checks code and config only.
+.awos/
+.claude/
+context/
+*.md
+package-lock.json
+dist/
+coverage/
+playwright-report/
+test-results/

@@ -1,0 +1,23 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f7f7f7; /* PALETTE.bg in src/tuning.ts */
+}
+
+main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+}
+
+/* 800 by 300 at most; on smaller windows it shrinks to fit with a 16 px margin
+   on every side, keeping its 8:3 shape (functional spec 2.9). */
+#game {
+  display: block;
+  width: min(800px, calc(100vw - 32px), calc((100vh - 32px) * 8 / 3));
+  height: auto;
+  aspect-ratio: 8 / 3;
+  image-rendering: pixelated;
+}

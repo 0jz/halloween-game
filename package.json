@@ -1,0 +1,36 @@
+{
+  "name": "codeference-dino-game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "test": "npm run typecheck && vitest run",
+    "e2e:install": "playwright install chromium",
+    "pree2e": "npm run e2e:install",
+    "e2e": "playwright test",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "check": "npm run lint && npm test && npm run e2e",
+    "activity": "node .claude/hooks/activity-report.mjs",
+    "prepare": "node .claude/hooks/install-git-hooks.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+coverage/
+playwright-report/
+test-results/
+.serena/
+
+# Keys belong in environment variables, never in a file in the repository.
+.env
+.env.*
+!.env.example
+
+# Lock held briefly by the activity-log hook while it appends.
+.workshop/*.lock
