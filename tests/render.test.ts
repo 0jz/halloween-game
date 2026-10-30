@@ -13,6 +13,7 @@ import { fakeContext } from './helpers.js';
 import type { Call, FakeContext } from './helpers.js';
 import { Sprites } from '../src/sprites.js';
 import {
+  CANDY_TIME_TEXT,
   CANVAS,
   DINO_X,
   GROUND_Y,
@@ -57,8 +58,18 @@ function idleState(overrides: Partial<GameState> = {}): GameState {
     },
     obstacles: [],
     bats: [],
+    hat: null,
+    candies: [],
+    hearts: 0,
+    candyTime: false,
+    invulnTicks: 0,
     spawnLog: [],
-    hud: { hint: 'start', gameOver: false, blinkVisible: true },
+    hud: {
+      hint: 'start',
+      gameOver: false,
+      blinkVisible: true,
+      dinoVisible: true,
+    },
     ...overrides,
   };
 }
@@ -92,7 +103,7 @@ function stateWithCacti(): GameState {
     tick: 90,
     dino: { ...base.dino, pose: 'run', frame: 1 },
     obstacles: [obstacle(0, 'small', 300), obstacle(1, 'large', 512.5)],
-    hud: { hint: null, gameOver: false, blinkVisible: true },
+    hud: { hint: null, gameOver: false, blinkVisible: true, dinoVisible: true },
   });
 }
 
@@ -258,7 +269,12 @@ describe('built-in drawers', () => {
     for (const state of [
       idleState(),
       idleState({
-        hud: { hint: 'restart', gameOver: true, blinkVisible: true },
+        hud: {
+          hint: 'restart',
+          gameOver: true,
+          blinkVisible: true,
+          dinoVisible: true,
+        },
       }),
       idleState({ tick: 37, score: 1234 }),
       idleState({ score: 1234, hi: 5678 }),
@@ -286,7 +302,12 @@ describe('built-in drawers', () => {
     createLayerStack().run(
       restart,
       idleState({
-        hud: { hint: 'restart', gameOver: true, blinkVisible: true },
+        hud: {
+          hint: 'restart',
+          gameOver: true,
+          blinkVisible: true,
+          dinoVisible: true,
+        },
       }),
     );
     expect(texts(restart)).toContain('Press SPACE to restart');
@@ -294,7 +315,14 @@ describe('built-in drawers', () => {
     const none = fakeContext();
     createLayerStack().run(
       none,
-      idleState({ hud: { hint: null, gameOver: false, blinkVisible: true } }),
+      idleState({
+        hud: {
+          hint: null,
+          gameOver: false,
+          blinkVisible: true,
+          dinoVisible: true,
+        },
+      }),
     );
     expect(texts(none)).toEqual([formatScore(0)]);
   });
@@ -322,7 +350,12 @@ describe('built-in drawers', () => {
       ctx,
       idleState({
         score: 100,
-        hud: { hint: null, gameOver: false, blinkVisible: false },
+        hud: {
+          hint: null,
+          gameOver: false,
+          blinkVisible: false,
+          dinoVisible: true,
+        },
       }),
     );
     expect(texts(ctx)).toEqual([]);
@@ -522,7 +555,12 @@ describe('built-in drawers', () => {
       phase: 'running',
       dino: { ...base.dino, pose: 'duck', frame: 1 },
       bats: [bat(0, 300.4), bat(1, 500)],
-      hud: { hint: null, gameOver: false, blinkVisible: true },
+      hud: {
+        hint: null,
+        gameOver: false,
+        blinkVisible: true,
+        dinoVisible: true,
+      },
     });
     const ctx = fakeContext();
     createLayerStack().run(ctx, state);
@@ -542,6 +580,78 @@ describe('built-in drawers', () => {
     expect(accentIndex).toBeGreaterThanOrEqual(0);
   });
 
+  it('draws the hat and candies in the world callback, after the bats', () => {
+    const hat = {
+      x: 400.4,
+      y: 150,
+      width: Sprites.hat.width,
+      height: Sprites.hat.height,
+      hitbox: { x: 400, y: 150, width: 1, height: 1 },
+    };
+    const candy = {
+      id: 0,
+      x: 600,
+      y: 200.6,
+      width: Sprites.candy.width,
+      height: Sprites.candy.height,
+      hitbox: { x: 600, y: 201, width: 1, height: 1 },
+    };
+    const ctx = fakeContext();
+    createLayerStack().run(ctx, idleState({ hat, candies: [candy] }));
+    expect(rectsPerCallback(ctx)[1]).toEqual([
+      ...spriteRects(Sprites.hat, 400, 150),
+      ...spriteRects(Sprites.candy, 600, 201),
+    ]);
+  });
+
+  it('draws one accent heart per heart top-left, clear of the score and hint', () => {
+    const none = fakeContext();
+    createLayerStack().run(none, idleState());
+    const ctx = fakeContext();
+    createLayerStack().run(ctx, idleState({ hearts: 2 }));
+    const base = rectsPerCallback(none)[3] ?? [];
+    const hud = rectsPerCallback(ctx)[3] ?? [];
+    expect(base).toEqual([]);
+    const step = Sprites.heart.width + HUD.heartGap;
+    expect(hud).toEqual([
+      ...spriteRects(Sprites.heart, HUD.heartsX, HUD.heartsY),
+      ...spriteRects(Sprites.heart, HUD.heartsX + step, HUD.heartsY),
+    ]);
+    for (const r of hud) {
+      expect(r.x + r.w).toBeLessThan(HUD.right - 5 * HUD.charWidth);
+      expect(r.y + r.h).toBeLessThan(HUD.hintY);
+    }
+    const fg = ctx.calls.some(
+      (c) => c.op === 'fillStyle' && c.value === PALETTE.accent,
+    );
+    expect(fg).toBe(true);
+  });
+
+  it('shows the candy time mark only while candyTime is on', () => {
+    const off = fakeContext();
+    createLayerStack().run(off, idleState({ hearts: 1 }));
+    expect(texts(off)).not.toContain(CANDY_TIME_TEXT);
+    const on = fakeContext();
+    createLayerStack().run(on, idleState({ hearts: 1, candyTime: true }));
+    expect(texts(on)).toContain(CANDY_TIME_TEXT);
+    const styles = on.calls.flatMap((c) =>
+      c.op === 'fillStyle' ? [c.value] : [],
+    );
+    for (const style of styles) {
+      expect(Object.values(PALETTE)).toContain(style);
+    }
+  });
+
+  it('skips the dino while hud.dinoVisible is false', () => {
+    const base = idleState();
+    const ctx = fakeContext();
+    createLayerStack().run(
+      ctx,
+      idleState({ hud: { ...base.hud, dinoVisible: false } }),
+    );
+    expect(rectsPerCallback(ctx)[2]).toEqual([]);
+  });
+
   it('draws no obstacle rects when there are no obstacles', () => {
     const ctx = fakeContext();
     createLayerStack().run(ctx, idleState());
@@ -559,7 +669,12 @@ describe('game over screen (functional spec 2.5)', () => {
       score: 87,
       dino: { ...base.dino, pose: 'hit', frame: 0 },
       obstacles: [obstacle(0, 'small', DINO_X + 30)],
-      hud: { hint: 'restart', gameOver: true, blinkVisible: true },
+      hud: {
+        hint: 'restart',
+        gameOver: true,
+        blinkVisible: true,
+        dinoVisible: true,
+      },
     });
   }
 
@@ -653,7 +768,12 @@ describe('pixel grid (functional spec 2.9)', () => {
       speed: 7.3125,
       dino: { ...base.dino, y: 171.6625, onGround: false, pose: 'stand' },
       obstacles: [obstacle(0, 'small', 694.3811), obstacle(1, 'large', 402.5)],
-      hud: { hint: null, gameOver: false, blinkVisible: true },
+      hud: {
+        hint: null,
+        gameOver: false,
+        blinkVisible: true,
+        dinoVisible: true,
+      },
     });
   }
 
@@ -747,7 +867,7 @@ describe('HI and score line (functional spec 2.1, 2.6)', () => {
       phase: 'running',
       tick: 400,
       score: 42,
-      hud: { hint: null, gameOver: false, blinkVisible },
+      hud: { hint: null, gameOver: false, blinkVisible, dinoVisible: true },
       ...overrides,
     });
 
@@ -806,7 +926,12 @@ describe('HI and score line (functional spec 2.1, 2.6)', () => {
         phase: 'dead',
         score: 87,
         hi: 87,
-        hud: { hint: 'restart', gameOver: true, blinkVisible: true },
+        hud: {
+          hint: 'restart',
+          gameOver: true,
+          blinkVisible: true,
+          dinoVisible: true,
+        },
       }),
     );
     expect(painted.map((t) => t.text)).toEqual(

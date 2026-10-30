@@ -17,6 +17,7 @@ import {
   FLASH_ALPHA,
   FLASH_FRAMES,
   GROUND_Y,
+  HAT_TOP_ABOVE_GROUND,
   HUD,
   MILESTONE_EVERY,
   PALETTE,
@@ -42,6 +43,7 @@ export const SPARK_FRAMES = 24;
 export const SCARE_FRAMES = 120;
 const JUMP_SPARKS = 6;
 const MILESTONE_SPARKS = 10;
+const PICKUP_SPARKS = 8;
 /** Horizontal middle of the dinosaur's feet, in logical px. */
 const FEET_X = DINO_X + 22;
 
@@ -269,6 +271,26 @@ export function installReactions({
     }),
     game.on('land', () => {
       shakes.push({ kind: 'land', startedAt: null });
+    }),
+    game.on('heartLost', () => {
+      shakes.push({ kind: 'land', startedAt: null });
+    }),
+    game.on('hatCaught', () => {
+      worldBursts.push({
+        startedAt: null,
+        particles: makeBurst(
+          rng,
+          FEET_X,
+          GROUND_Y - HAT_TOP_ABOVE_GROUND,
+          PICKUP_SPARKS,
+        ),
+      });
+    }),
+    game.on('candyEaten', () => {
+      worldBursts.push({
+        startedAt: null,
+        particles: makeBurst(rng, FEET_X, GROUND_Y - 40, PICKUP_SPARKS),
+      });
     }),
     game.on('die', () => {
       clear();

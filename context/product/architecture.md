@@ -34,19 +34,21 @@ Codebase exploration at creation time found no existing code, so every choice co
 | `game.ts` | `createGame(deps)`: the state machine (`idle → running → dead → running …`), the fixed step, the intent queue, run reset, HUD state derivation, event emission. Holds a private `RunState` and projects it onto the public `GameState`. | no |
 | `events.ts` | Typed event bus: the `GameEvent` union, `createBus()` with `on` (returns unsubscribe), `off`, `emit`. | no |
 | `physics.ts` | Gravity, jump impulse, ground contact. Pure functions over plain data. | no |
-| `obstacles.ts` | Cactus spawning, gap selection, speed ramp. Pure; takes the current tick, speed and `Rng`. | no |
+| `obstacles.ts` | Pumpkin spawning (the `cactus*` names are kept for compatibility, see section 3), gap selection, speed ramp. Pure; takes the current tick, speed and `Rng`. | no |
+| `bats.ts` | Bat timing (first in `[BAT_FIRST_TICK, BAT_FIRST_TICK_MAX]`, then every `BAT_INTERVAL_TICKS`), placement clearance, wing frame and movement, on its own `BAT_SALT` stream so pumpkin draws never change. Pure. | no |
+| `pickups.ts` | The witch's hat, candies, hearts and the protection blink: timing and clearance on the `HAT_SALT` and `CANDY_SALT` streams, heart gain capped at `MAX_HEARTS`, the `INVULN_TICKS` countdown, `dinoVisible`. Pure. | no |
 | `collision.ts` | Axis-aligned hitbox intersection using the per-sprite hitboxes from `sprites.ts`. | no |
 | `score.ts` | `advanceScore`, `isMilestone`, `formatScore` (floored, five digits, zero-padded, capped at 99999). Pure. | no |
-| `sprites.ts` | Pure data: each sprite as a `readonly string[]` bitmap (`#` = pixel) plus its hitbox. Three dino poses (two run frames, hit), two cactus sizes, ground tile. Width and height derive from the bitmap. No binary assets in the repository. | no |
-| `tuning.ts` | Every number the spec quotes and every layout number, as named `as const` exports: `STEP_SECONDS`, `CANVAS`, `PALETTE`, `GROUND_Y`, `DINO_X`, `START_SPEED`, `MAX_SPEED`, `MAX_SPEED_AT_TICK`, `JUMP_DURATION_TICKS`, `JUMP_HEIGHT_PX`, `FIRST_ARRIVAL_TICKS`, `REACTION_TICKS`, `MAX_GROUP_SIZE`, `SCORE_PER_SECOND`, `MAX_SCORE`, `MILESTONE_EVERY`, `RUN_FRAME_TICKS`, `BLINK_SCHEDULE`, `FRAME_CLAMP_MS`, `MAX_SEED`. The export names are part of the frozen contract; the values may be retuned. | no |
+| `sprites.ts` | Pure data: each sprite as a `readonly string[]` bitmap (`#` = pixel) plus its hitbox. Dino poses (stand, two run frames, hit, two duck frames), two pumpkin sizes (exposed as `cactusSmall` and `cactusLarge`), two bat frames, hat, candy, heart, ground tile. Every colour comes from `PALETTE`. Width and height derive from the bitmap. No binary assets in the repository. | no |
+| `tuning.ts` | Every number the spec quotes and every layout number, as named `as const` exports: `STEP_SECONDS`, `CANVAS`, `PALETTE`, `GROUND_Y`, `DINO_X`, `START_SPEED`, `MAX_SPEED`, `MAX_SPEED_AT_TICK`, `JUMP_DURATION_TICKS`, `JUMP_HEIGHT_PX`, `FIRST_ARRIVAL_TICKS`, `REACTION_TICKS`, `MAX_GROUP_SIZE`, `SCORE_PER_SECOND`, `MAX_SCORE`, `MILESTONE_EVERY`, `RUN_FRAME_TICKS`, `BLINK_SCHEDULE`, `FRAME_CLAMP_MS`, `MAX_SEED`; for the Halloween edition also `NIGHT_DARKER_TICK`, `NIGHT_STARS_TICK`, `NIGHT_EYES_TICK`, `NIGHT_DARKEST_TICK`, `STARS_BASE`, `STARS_EXTRA`, `NIGHT_MAX_ALPHA`, `CLOUD_COUNT`, `EYES_PAIRS`, `NIGHT_SALT`, `REACTION_SALT`, `SHAKE_LAND_PX`, `SHAKE_DIE_PX`, `SHAKE_LAND_FRAMES`, `SHAKE_DIE_FRAMES`, `FLASH_ALPHA`, `FLASH_FRAMES`, `BAT_SALT`, `BAT_FIRST_TICK`, `BAT_FIRST_TICK_MAX`, `BAT_INTERVAL_TICKS`, `BAT_HITBOX_TOP_ABOVE_GROUND`, `BAT_HITBOX_HEIGHT`, `BAT_FLAP_TICKS`, `BAT_TO_BAT_TICKS`, `HAT_SALT`, `HAT_FIRST_TICK`, `HAT_RESPAWN_TICKS`, `HAT_TOP_ABOVE_GROUND`, `HAT_CLEAR_TICKS`, `CANDY_SALT`, `CANDY_INTERVAL_TICKS`, `CANDY_CLEAR_PX`, `MAX_HEARTS`, `INVULN_TICKS`, `INVULN_BLINK_TICKS`, `CANDY_TIME_TEXT`, `CANDY_TIME_FONT`. `PALETTE` has the keys `bg`, `fg`, `accent`, `dim`, `moon` and `skyDark` (section 8). The export names are part of the frozen contract; the values may be retuned. | no |
 | `rng.ts` | `createRng(seed)` (mulberry32) behind `Rng { next(): number }` returning [0, 1); `parseSeed(search)`. | no |
 | `render.ts` | `createRenderer(canvas)`: draws sprites with `fillRect` from precomputed pixel runs (no offscreen canvases), derives its scale from `canvas.width / CANVAS.width`, applies the camera offset, runs layer callbacks, counts render frames. Reads state, never mutates it. | yes |
-| `input.ts` | The pure keyboard reducer `createKeyboard()`. | no |
+| `input.ts` | The pure keyboard reducer `createKeyboard()`; also exports `PRIMARY_CODES` and `DUCK_CODE` (`ArrowDown`). | no |
 | `input-dom.ts` | The DOM adapter `attachKeyboard(window, keyboard, onIntent)` with `dispose()`. | yes |
-| `features/` | Cosmetic features, one module each, installed from `main.ts` as `installX({ game, renderer })` and following the "Features own their state" rule in 2.2. First: `puddle.ts`, the red pool on the game-over screen. | no |
+| `features/` | Cosmetic features, one module each, installed from `main.ts` as `installX({ game, renderer })` and following the "Features own their state" rule in 2.2. `puddle.ts`, the pool on the game-over screen; `night-sky.ts`, the darkening sky with moon, stars, clouds and eyes (`background` layer, darkness from `state.tick`, drift from the render frame counter); `reactions.ts`, land and heart-lost shake, jump, milestone, hat and candy sparks, the crash flash and shake, and the bat that crosses the sky every 500 points (`background`, `foreground` and `hud` layers, owns `setCamera`). | no |
 | `store.ts` | High-score stores behind `HighScoreStore`: `createMemoryStore()` and `createStorageStore(storage, key)` over any `getItem`/`setItem` storage (`main.ts` passes `localStorage`). Rejects stored values that are not a score the game can produce and never lowers the stored best. | no |
 | `assert.ts` | `assertNever`, shared by every `switch` on a union. | no |
-| `types.ts` | Shapes shared by several modules: `Rect`, `Dino`, `Obstacle`, `DinoPose`, `ObstacleKind`, `Phase`, `GameState`, `GameDeps`, `Game`, `Intent`, `Rng`, `HighScoreStore`, `LayerName`, `DrawContext`, `RenderFrame`, `LayerDraw`. Module-private types stay in their module. | no |
+| `types.ts` | Shapes shared by several modules: `Rect`, `Dino`, `Obstacle`, `Bat`, `Hat`, `Candy`, `DinoPose`, `ObstacleKind`, `Phase`, `GameState`, `GameDeps`, `Game`, `Intent`, `Rng`, `HighScoreStore`, `LayerName`, `DrawContext`, `RenderFrame`, `LayerDraw`. Module-private types stay in their module. | no |
 
 ### 2.2 Rules
 
@@ -54,12 +56,12 @@ Codebase exploration at creation time found no existing code, so every choice co
 - **Deterministic by construction.** All randomness in the simulation goes through the game's `Rng`; all simulation time is the tick counter. `Math.random`, `Date.now`, `new Date`, `performance.now`, `setTimeout` and `setInterval` appear under `src/` only in `main.ts`, enforced by ESLint `no-restricted-properties` and `no-restricted-syntax` with an allow-list of `main.ts` alone. Any visual that depends on simulation time (run-cycle frame, milestone blink) derives it from `state.tick`.
 - **Gameplay emits, features subscribe.** Cross-cutting behaviour goes through the bus. A step collects its events; `game.ts` commits the new state and then emits them synchronously in step order, before that frame's render, so a listener calling `game.state()` sees the post-step state. Listeners may call `dispatch` (queued for the next step); calling `tick` or `frame` from a listener throws. A throwing listener stops neither the other listeners nor the step: the bus reports the error asynchronously with `queueMicrotask`, so it surfaces as an uncaught error without breaking the frame loop. `speedChange` fires only when speed crosses a 0.1x multiple of `START_SPEED`, not every tick.
 - **Features own their state.** A cosmetic feature is a module exporting `installX({ game, renderer })` that returns `dispose()`. It keeps its own state in a closure, resets it on `start` and `restart`, updates it from events, and draws it from a layer callback. It never writes to `GameState`, never edits `game.ts`, and never keeps module-level state that would survive a restart. Changes driven by the simulation (dust on `land`) follow the `tick` event; animations that must keep moving on the frozen game-over screen use the `RenderFrame` counter passed to draw callbacks. Visual randomness uses the feature's own `createRng(state.seed ^ SALT)` and never advances the game's `Rng`, so a feature cannot change the course.
-- **Draw in layers.** `renderer.addLayer(layer, draw)` with `draw(ctx: DrawContext, state: GameState, frame: RenderFrame)` returns an unsubscribe. Layers run in the fixed order `background`, `parallax`, `world`, `foreground`, `hud`, and within a layer in registration order. Each callback is wrapped in `ctx.save()` / `ctx.restore()`. All drawing uses logical 800 by 300 coordinates. `parallax`, `world` and `foreground` are translated by the camera offset from `renderer.setCamera(fn)` (zero by default; screen shake uses it); `background` and `hud` never move. The built-in ground, cacti, dino and HUD drawers register through this same API so that a learner has a visible example to copy. Draw callbacks receive no `emit`.
+- **Draw in layers.** `renderer.addLayer(layer, draw)` with `draw(ctx: DrawContext, state: GameState, frame: RenderFrame)` returns an unsubscribe. Layers run in the fixed order `background`, `parallax`, `world`, `foreground`, `hud`, and within a layer in registration order. Each callback is wrapped in `ctx.save()` / `ctx.restore()`. All drawing uses logical 800 by 300 coordinates. `parallax`, `world` and `foreground` are translated by the camera offset from `renderer.setCamera(fn)` (zero by default; screen shake uses it); `background` and `hud` never move. The built-in ground, pumpkin, bat, pickup, dino and HUD drawers (hearts and the "candy time" mark are `hud`) register through this same API so that a learner has a visible example to copy. Draw callbacks receive no `emit`.
 - **Seed lifecycle.** `main.ts` parses `seed` from the query string; `parseSeed` accepts a whole number from 0 to `MAX_SEED` (2^32 − 1) and treats anything else as absent, because mulberry32 would map larger values onto smaller ones. A run's seed is the URL seed if present, otherwise `deps.randomSeed()`, called exactly once per start and per restart and never at construction. A fresh `Rng` is built from it, so a seeded page replays the same course and an unseeded page does not. The `Rng` state is a plain `uint32` inside `RunState` and is never advanced outside a step.
 - **Fixed timestep and frame driver.** The simulation advances in steps of `STEP_SECONDS = 1/60`; `game.tick(n)` advances exactly n steps and takes no time argument. `game.frame(nowMs)` is the accumulator used by the browser: the first call only records `nowMs` and returns 0; later calls add the elapsed time clamped to [0, `FRAME_CLAMP_MS`], run whole steps (compared with a small epsilon, so a clamped 100 ms frame runs exactly 6 steps), carry the remainder, and return how many steps ran, including steps in `idle` or `dead` where nothing moves. `main.ts` re-arms `requestAnimationFrame` first, then calls `game.frame(performance.now())` and renders exactly once from `game.view()`. No interpolation; duplicate frames on high-refresh displays are accepted.
-- **Input model.** The keyboard reducer tracks held keys per key code. `keyDown(code, repeat)` returns `primary` only for `Space` or `ArrowUp`, with `repeat === false`, when that code is not already held; `keyUp(code)` releases it; `reset()` releases all. The DOM adapter registers `keydown` and `keyup` once, calls `preventDefault()` on every `keydown` and `keyup` of those two keys whatever the reducer returns, calls `reset()` on window `blur` and when the document becomes hidden (a `keyup` during alt-tab is never delivered), and exposes `dispose()`. Intents are queued; the next step consumes at most one `primary` and drops the rest, interpreting it by phase: `idle` starts the run, `running` and grounded jumps, `running` and airborne is ignored, `dead` restarts.
+- **Input model.** The keyboard reducer tracks held keys per key code. `keyDown(code, repeat)` returns `primary` only for `Space` or `ArrowUp`, and `duckDown` only for `ArrowDown`, with `repeat === false`, when that code is not already held; `keyUp(code)` releases it and returns `duckUp` if it was `ArrowDown`, else `null`; `reset()` releases all and returns `duckUp` if `ArrowDown` was held, else `null`. The DOM adapter registers `keydown` and `keyup` once, calls `preventDefault()` on every `keydown` and `keyup` of those three keys whatever the reducer returns, forwards any non-null intent, calls `reset()` on window `blur` and when the document becomes hidden (a `keyup` during alt-tab is never delivered), and exposes `dispose()`. Intents are queued; the next step consumes at most one `primary` and drops the rest, interpreting it by phase: `idle` starts the run, `running` and grounded jumps, `running` and airborne is ignored, `dead` restarts. `duckDown` and `duckUp` bypass that queue: while `running` the last one dispatched before a step wins, it takes effect only while grounded (a jump clears the duck), and in the air, `idle` or `dead` it is ignored.
 - **Start and restart.** The step that consumes `primary` in `idle` or `dead` builds a fresh run from `tuning.ts` initial values (seed and `Rng`, speed, spawn position, obstacles and the obstacle id counter, score, dino, HUD), emits `start` or `restart`, and moves nothing: `tick` is 0 after it. The next step is running tick 1. Only the persisted high score survives.
-- **HUD is state, not rendering logic.** `game.ts` derives `hud.hint` (a key, not text), `hud.gameOver`, `hud.blinkVisible`, `dino.pose` and `dino.frame` (toggles every `RUN_FRAME_TICKS` while running on the ground). `blinkVisible` follows `BLINK_SCHEDULE` while running (hidden on ticks 0 to 9, 20 to 29 and 40 to 49 after a milestone) and is always `true` outside `running`, so the final score is never hidden on the game-over screen. `render.ts` maps hint keys to text and paints the fields verbatim; it decides nothing.
+- **HUD is state, not rendering logic.** `game.ts` derives `hud.hint` (a key, not text), `hud.gameOver`, `hud.blinkVisible`, `hud.dinoVisible` (the protection blink), `dino.pose` and `dino.frame` (toggles every `RUN_FRAME_TICKS` while running on the ground). `blinkVisible` follows `BLINK_SCHEDULE` while running (hidden on ticks 0 to 9, 20 to 29 and 40 to 49 after a milestone) and is always `true` outside `running`, so the final score is never hidden on the game-over screen. `render.ts` maps hint keys to text and paints the fields verbatim; it decides nothing.
 - **State conventions.** `game.ts` keeps a private `RunState` (the `Rng` state, the exact float distance behind the score, the next spawn position, the blink start, the next obstacle id, the intent queue) separate from the public `GameState`. `step(runState, intent)` is pure and returns `{ runState, events }`; `state()` is a `structuredClone` of the projection, so snapshot tests are plain equality. `phase` is a literal union; every `switch` on it ends in `assertNever`. `Rng` and `HighScoreStore` are interfaces without an `I` prefix; implementations are `createX()` factories. Constants are `as const` objects with derived unions, never `enum`.
 
 ---
@@ -70,9 +72,9 @@ These names are a public contract. Tests outside this repository import them, so
 
 ```ts
 // types.ts
-type Intent = 'primary';
+type Intent = 'primary' | 'duckDown' | 'duckUp';
 type Phase = 'idle' | 'running' | 'dead';
-type DinoPose = 'stand' | 'run' | 'hit';
+type DinoPose = 'stand' | 'run' | 'hit' | 'duck';
 type ObstacleKind = 'small' | 'large';
 type LayerName = 'background' | 'parallax' | 'world' | 'foreground' | 'hud';
 
@@ -81,7 +83,7 @@ interface Rect { readonly x: number; readonly y: number; readonly width: number;
 
 interface Dino extends Rect {
   readonly onGround: boolean;
-  readonly pose: DinoPose;            // 'hit' only when phase === 'dead'
+  readonly pose: DinoPose;            // 'hit' only when phase === 'dead'; 'duck' only while running and ducking
   readonly frame: 0 | 1;              // run-cycle frame
   readonly hitbox: Rect;              // absolute; what collision uses
 }
@@ -90,6 +92,19 @@ interface Obstacle extends Rect {
   readonly id: number;                // 0, 1, 2 … within a run; resets on start and restart
   readonly group: number;             // 0, 1, 2 … within a run; obstacles of one group share it
   readonly kind: ObstacleKind;
+  readonly hitbox: Rect;
+}
+
+interface Bat extends Rect {
+  readonly id: number;                // 0, 1, 2 … within a run; resets on start and restart
+  readonly wing: 0 | 1;               // two-frame flap, from the tick
+  readonly hitbox: Rect;
+}
+
+interface Hat extends Rect { readonly hitbox: Rect }
+
+interface Candy extends Rect {
+  readonly id: number;                // 0, 1, 2 … within a run; resets on start and restart
   readonly hitbox: Rect;
 }
 
@@ -111,9 +126,20 @@ interface GameState {
   readonly hi: number | null;         // null when no high score has ever been recorded
   readonly dino: Dino;
   readonly obstacles: readonly Obstacle[];
+  readonly bats: readonly Bat[];
+  readonly hat: Hat | null;           // at most one; none after a catch
+  readonly candies: readonly Candy[];
+  readonly hearts: number;            // 0 to MAX_HEARTS
+  readonly candyTime: boolean;        // true once the hat is caught, for the rest of the run
+  readonly invulnTicks: number;       // protection ticks left after losing a heart; 0 when unprotected
   readonly spawnLog: readonly { readonly kind: ObstacleKind; readonly group: number; readonly tick: number }[];
                                       // one entry per obstacle, this run only
-  readonly hud: { readonly hint: 'start' | 'restart' | null; readonly gameOver: boolean; readonly blinkVisible: boolean };
+  readonly hud: {
+    readonly hint: 'start' | 'restart' | null;
+    readonly gameOver: boolean;
+    readonly blinkVisible: boolean;
+    readonly dinoVisible: boolean;    // false on the hidden blocks of the protection blink
+  };
 }
 
 interface Game {
@@ -130,7 +156,15 @@ type GameEvent =
   | { type: 'tick'; tick: number }
   | { type: 'jump' }
   | { type: 'land' }
+  | { type: 'duckStart' }
+  | { type: 'duckEnd' }
   | { type: 'spawn'; obstacle: Obstacle }
+  | { type: 'batSpawn'; bat: Bat }
+  | { type: 'hatSpawn'; hat: Hat }
+  | { type: 'candySpawn'; candy: Candy }
+  | { type: 'hatCaught' }
+  | { type: 'candyEaten'; hearts: number }
+  | { type: 'heartLost'; hearts: number }
   | { type: 'milestone'; score: number }
   | { type: 'speedChange'; speed: number }
   | { type: 'die'; score: number; highScore: number; isNewHighScore: boolean }
@@ -152,22 +186,31 @@ interface RenderFrame { readonly count: number }   // render frames since page l
 type LayerDraw = (ctx: DrawContext, state: GameState, frame: RenderFrame) => void;
 ```
 
-- **Functions.** `createGame(deps: GameDeps): Game` in `game.ts`. `createKeyboard()` in `input.ts` with `keyDown(code: string, repeat: boolean): Intent | null`, `keyUp(code: string): void` and `reset(): void`. `createRng(seed: number): Rng` and `parseSeed(search: string): number | undefined` (0 to `MAX_SEED`) in `rng.ts`. `formatScore(n: number): string` in `score.ts` (floors, pads to five digits, caps at `99999`). `createRenderer(canvas)` in `render.ts` returning `addLayer(layer: LayerName, draw: LayerDraw): () => void`, `setCamera(fn: (state: GameState, frame: RenderFrame) => { x: number; y: number }): void` and `draw(state: GameState): void`. The `tuning.ts` export names listed in section 2.1.
+- **Functions.** `createGame(deps: GameDeps): Game` in `game.ts`. `createKeyboard()` in `input.ts` with `keyDown(code: string, repeat: boolean): Intent | null`, `keyUp(code: string): Intent | null` (`'duckUp'` when `ArrowDown` was held) and `reset(): Intent | null` (the same). `createRng(seed: number): Rng` and `parseSeed(search: string): number | undefined` (0 to `MAX_SEED`) in `rng.ts`. `formatScore(n: number): string` in `score.ts` (floors, pads to five digits, caps at `99999`). `createRenderer(canvas)` in `render.ts` returning `addLayer(layer: LayerName, draw: LayerDraw): () => void`, `setCamera(fn: (state: GameState, frame: RenderFrame) => { x: number; y: number }): void` and `draw(state: GameState): void`. The `tuning.ts` export names listed in section 2.1.
 - **Step semantics.** The step that applies a start or restart leaves `tick === 0` and moves nothing; each later running step increments `tick` first. A step consumes at most one `primary`. `frame` semantics are as in section 2.2.
-- **Event semantics.** Within a step, events are emitted in this order: `speedChange`, `jump`, `land`, `spawn`, `milestone`, `die`, `tick`.
+- **Event semantics.** Within a step, events are emitted in this order: `speedChange`, `duckStart` or `duckEnd`, `jump`, `land`, `spawn`, `batSpawn`, `hatSpawn`, `candySpawn`, `milestone`, `hatCaught`, `candyEaten`, `heartLost` or `die`, `tick`. A `duckEnd` caused by a jump precedes that `jump`.
 
   | Event | When | Payload |
   |---|---|---|
   | `start` | the first run from `idle` only | the run's seed |
   | `restart` | a run from `dead`; never also `start` | the run's seed |
   | `tick` | once per running step, last, including the step that dies; never in `idle` or `dead` | the new `tick` |
-  | `spawn` | once per obstacle, in group order | the obstacle |
+  | `spawn` | once per obstacle (pumpkin), in group order | the obstacle |
+  | `duckStart` | a grounded step applies a pending `duckDown` and the dino was not ducking | none |
+  | `duckEnd` | a grounded step applies a pending `duckUp` while ducking, or a jump starts while ducking | none |
+  | `batSpawn` | a bat is placed at the right edge | the bat |
+  | `hatSpawn` | the witch's hat is placed at the right edge (from `HAT_FIRST_TICK`, never after a catch) | the hat |
+  | `candySpawn` | a candy is placed at the right edge (only in candy time) | the candy |
+  | `hatCaught` | the dino's hitbox touches the hat; `candyTime` becomes true | none |
+  | `candyEaten` | the dino's hitbox touches a candy, once per candy | `hearts`: the count after the gain (capped at `MAX_HEARTS`) |
+  | `heartLost` | a pumpkin or bat hit while `hearts > 0` and unprotected; protection of `INVULN_TICKS` starts | `hearts`: the count after the loss |
   | `milestone` | the score crosses a multiple of `MILESTONE_EVERY` | that multiple |
   | `speedChange` | `floor(speed / START_SPEED * 10)` changes | the new speed |
-  | `die` | collision | `score`: the final score; `highScore`: `hi` after the death; `isNewHighScore`: whether it was saved |
+  | `die` | a pumpkin or bat hit with `hearts === 0`, not protected; a hit with hearts left is a `heartLost`, never a `die` | `score`: the final score; `highScore`: `hi` after the death; `isNewHighScore`: whether it was saved |
 
 - **High score rule.** A run's score is saved when `score > (hi ?? 0)`. A zero-score run with no recorded best saves nothing, so no `HI` appears.
 - **Reaching the dinosaur.** An obstacle reaches the dinosaur on the first tick where `obstacle.hitbox.x <= dino.hitbox.x + dino.hitbox.width`.
+- **Halloween names.** The art is pumpkins, but the `cactus*` names stay for compatibility: the sprites `Sprites.cactusSmall` and `Sprites.cactusLarge` and the constants `LARGE_CACTUS_PROBABILITY` (and the other cactus wording in `tuning.ts`) keep their names. `Obstacle` and `ObstacleKind` are unchanged. Hearts, protection and `die`: a hit with `hearts > 0` costs one heart and gives `INVULN_TICKS` of protection, during which hits are ignored and `hud.dinoVisible` blinks in blocks of `INVULN_BLINK_TICKS`; `restart` clears bats, hat, candies, hearts, `candyTime` and `invulnTicks`.
 - **Growth.** The output unions (`Phase`, `DinoPose`, `ObstacleKind`, `LayerName`, `Intent`, the `GameEvent` types) may gain members. Code outside this repository must not switch on them exhaustively.
 - **Browser surface.** `main.ts` always sets a frozen `window.__dino = { state: () => game.state(), seed: number | undefined, version: number }`, declared in `src/global.d.ts`. `seed` is the URL seed; the current run's seed is `state().seed`. `version` starts at 1 and only increases. The canvas is `canvas#game`, and the high score lives in `localStorage` under `dino.hi`. These are the only DOM-visible surfaces the Playwright tests use, and they carry no telemetry. Feature work may add fields, never remove or rename them.
 
@@ -209,6 +252,7 @@ type LayerDraw = (ctx: DrawContext, state: GameState, frame: RenderFrame) => voi
 ## 8. Rendering Details & Observability
 
 - **Canvas sizing:** CSS shows the game area at 800 by 300, centred, and shrinks it to fit smaller windows with a 16 px margin, keeping its 8:3 shape; it never grows beyond 800 by 300. `main.ts` (`fitCanvas`) keeps the backing store at the displayed size times `devicePixelRatio` (pure helper `backingSize` in `render.ts`), re-fitting on a `ResizeObserver` and on pixel-ratio changes. Each frame, `render.ts` derives the scale from `canvas.width / CANVAS.width`, then sets the transform, disables image smoothing and clears to `PALETTE.bg`, in that order, because resizing the canvas resets the first two. The canvas has CSS `image-rendering: pixelated`. At full size every logical pixel lands on whole device pixels; below 800 px the scale is fractional and 1-pixel edges may blend slightly. HUD text is right-aligned to a fixed edge, so font metrics that differ by operating system do not move it.
+- **Palette:** the Halloween look is a navy sky, pale grey foreground and one orange accent. `PALETTE` keys: `bg` (navy sky), `fg` (pale grey), `accent` (orange: hat band, candy, hearts, eyes, sparks, crash flash), `dim` (mid grey-blue for clouds and stars), `moon` (off-white) and `skyDark` (near-black navy night overlay). Sprites and features take every colour from `PALETTE`; no literal colours.
 - **Runtime observability:** browser console only. The game logs nothing in normal play; uncaught errors fail the smoke test. No telemetry.
 - **Performance target:** 60 steps per second on a laptop; the fixed timestep keeps rules correct when rendering drops frames. The renderer reads `game.view()`, so a frame allocates no copy of the state.
 

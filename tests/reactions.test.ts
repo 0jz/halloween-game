@@ -187,6 +187,41 @@ describe('installReactions', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('losing a heart thumps like a land, with no flash', () => {
+    const { bus, render } = setup();
+    bus.emit({ type: 'heartLost', hearts: 1 });
+    const { calls, alphas } = render();
+    expect(Math.abs(cameraOf(calls).y)).toBeLessThanOrEqual(SHAKE_LAND_PX);
+    expect(cameraOf(calls).y).not.toBe(0);
+    expect(alphas.filter((a) => a < 1)).toEqual([]);
+    for (let i = 1; i < SHAKE_LAND_FRAMES; i += 1) render();
+    expect(cameraOf(render().calls)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('catching the hat and eating a candy each burst sparks that burn out', () => {
+    for (const event of [
+      { type: 'hatCaught' },
+      { type: 'candyEaten', hearts: 1 },
+    ] as const) {
+      const { bus, render } = setup();
+      bus.emit(event);
+      expect(accentRects(render().calls)).toBeGreaterThan(0);
+      for (let i = 1; i < 30; i += 1) render();
+      expect(accentRects(render().calls)).toBe(0);
+    }
+  });
+
+  it('clears pickup effects on restart', () => {
+    const { bus, render } = setup();
+    bus.emit({ type: 'hatCaught' });
+    bus.emit({ type: 'heartLost', hearts: 0 });
+    render();
+    bus.emit({ type: 'restart', seed: 42 });
+    const { calls } = render();
+    expect(calls.filter((c) => c.op === 'fillRect')).toEqual([]);
+    expect(cameraOf(calls)).toEqual({ x: 0, y: 0 });
+  });
+
   it('uses only fillRect, fillStyle, globalAlpha and the layer plumbing', () => {
     const { bus, render } = setup();
     bus.emit({ type: 'jump' });

@@ -36,6 +36,15 @@ export interface Bat extends Rect {
   readonly hitbox: Rect;
 }
 
+export interface Hat extends Rect {
+  readonly hitbox: Rect;
+}
+
+export interface Candy extends Rect {
+  readonly id: number; // 0, 1, 2 … within a run; resets on start and restart
+  readonly hitbox: Rect;
+}
+
 export interface GameDeps {
   seed?: number | undefined; // from the URL; undefined means a random seed per run
   randomSeed: () => number; // main.ts: Math.random based; tests: a stub
@@ -55,6 +64,11 @@ export interface GameState {
   readonly dino: Dino;
   readonly obstacles: readonly Obstacle[];
   readonly bats: readonly Bat[];
+  readonly hat: Hat | null; // at most one; none after a catch
+  readonly candies: readonly Candy[];
+  readonly hearts: number; // 0 to MAX_HEARTS
+  readonly candyTime: boolean; // true once the hat is caught, for the rest of the run
+  readonly invulnTicks: number; // protection ticks left after losing a heart
   // one entry per obstacle, this run only
   readonly spawnLog: readonly {
     readonly kind: ObstacleKind;
@@ -65,6 +79,7 @@ export interface GameState {
     readonly hint: 'start' | 'restart' | null;
     readonly gameOver: boolean;
     readonly blinkVisible: boolean;
+    readonly dinoVisible: boolean; // false on the hidden blocks of the protection blink
   };
 }
 
@@ -86,6 +101,11 @@ export type GameEvent =
   | { type: 'duckEnd' }
   | { type: 'spawn'; obstacle: Obstacle }
   | { type: 'batSpawn'; bat: Bat }
+  | { type: 'hatSpawn'; hat: Hat }
+  | { type: 'candySpawn'; candy: Candy }
+  | { type: 'hatCaught' }
+  | { type: 'candyEaten'; hearts: number }
+  | { type: 'heartLost'; hearts: number }
   | { type: 'milestone'; score: number }
   | { type: 'speedChange'; speed: number }
   | { type: 'die'; score: number; highScore: number; isNewHighScore: boolean }

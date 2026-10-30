@@ -56,6 +56,7 @@ describe('2.1 start screen', () => {
       hint: 'start',
       gameOver: false,
       blinkVisible: true,
+      dinoVisible: true,
     });
   });
 
@@ -150,7 +151,12 @@ describe('2.1 starting a run', () => {
     expect(s.speed).toBe(START_SPEED);
     expect(s.score).toBe(0);
     expect(s.obstacles).toEqual([]);
-    expect(s.hud).toEqual({ hint: null, gameOver: false, blinkVisible: true });
+    expect(s.hud).toEqual({
+      hint: null,
+      gameOver: false,
+      blinkVisible: true,
+      dinoVisible: true,
+    });
     expect(s.dino).toMatchObject({
       x: before.dino.x,
       y: before.dino.y,
@@ -409,7 +415,10 @@ describe('2.3 cacti', () => {
       const game = startLongRun(seed);
       const spawns = collect(game, 'spawn');
       const bats = collect(game, 'batSpawn');
+      const hats = collect(game, 'hatSpawn');
+      const candies = collect(game, 'candySpawn');
       let batsSeen = 0;
+      let pickupsSeen = 0;
       let trailing: number | null = null;
       let gaps = 0;
       let gapsAtMax = 0;
@@ -430,9 +439,12 @@ describe('2.3 cacti', () => {
         if (trailing !== null) {
           const gap = lead.x - trailing;
           expect(gap).toBeGreaterThanOrEqual(minGapPx(speed));
-          // A bat placed since the last group widens this gap on purpose
-          // (spec 002), so only the lower bound holds for it.
-          if (bats.length === batsSeen) {
+          // A bat, hat or candy placed since the last group widens this gap
+          // on purpose (spec 002), so only the lower bound holds for it.
+          if (
+            bats.length === batsSeen &&
+            hats.length + candies.length === pickupsSeen
+          ) {
             expect(gap).toBeLessThanOrEqual(MAX_GAP_FACTOR * minGapPx(speed));
           }
           gaps += 1;
@@ -441,6 +453,7 @@ describe('2.3 cacti', () => {
           }
         }
         batsSeen = bats.length;
+        pickupsSeen = hats.length + candies.length;
         trailing = Math.max(...spawned.map((o) => o.x + o.width));
       }
       expect(gaps).toBeGreaterThan(10);
@@ -717,6 +730,7 @@ describe('2.5 crashing and the game-over screen', () => {
       hint: 'restart',
       gameOver: true,
       blinkVisible: true,
+      dinoVisible: true,
     });
     // The dying step still emits `tick`, after `die`, and the two end the step.
     expect(events.slice(-2)).toEqual([
@@ -810,7 +824,12 @@ describe('2.7 restarting', () => {
     expect(s.dino.onGround).toBe(true);
     expect(s.dino.y + s.dino.height).toBe(GROUND_Y);
     expect(s.dino.pose).toBe('run');
-    expect(s.hud).toEqual({ hint: null, gameOver: false, blinkVisible: true });
+    expect(s.hud).toEqual({
+      hint: null,
+      gameOver: false,
+      blinkVisible: true,
+      dinoVisible: true,
+    });
     expect(events).toEqual([{ type: 'restart', seed: 9 }]);
   });
 

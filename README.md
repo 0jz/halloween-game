@@ -1,6 +1,6 @@
 # Codeference Dino Runner
 
-A browser version of the classic "no internet" dinosaur game: open the page, press SPACE, jump over cacti, beat your high score. Built in TypeScript on an HTML5 canvas with no framework and no runtime dependencies.
+A browser version of the classic "no internet" dinosaur game: open the page, press SPACE, jump over pumpkins, beat your high score, in a Halloween edition. Built in TypeScript on an HTML5 canvas with no framework and no runtime dependencies.
 
 It is also the practice codebase for the Codeference workshop on Claude Code and spec-driven development with [AWOS](https://github.com/provectus/awos). The repository is small on purpose: every game rule lives in a pure, unit-tested module, and the documents that led to the code are in `context/`.
 
@@ -21,7 +21,8 @@ npm run check      # lint + test + e2e, what CI runs
 ## How to play
 
 - SPACE or UP arrow starts a run, jumps, and restarts after a crash.
-- The pace rises the longer you survive. Your best score is remembered by your browser.
+- DOWN arrow ducks while you are on the ground, to pass under bats.
+- The pace rises the longer you survive, and the night sky darkens with a moon, stars and glowing eyes. Bats appear after about 25 seconds. Jump into the witch's hat that floats at jump height from about 30 seconds, then eat the candies that follow: each gives a heart (up to three) that lets you survive a crash, with 1.5 seconds of protection. Your best score is remembered by your browser.
 - Add `?seed=42` (any whole number) to the page address to get the same course every run. Useful for practice, for comparing with a friend, and for tests.
 
 ## Project layout

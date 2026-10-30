@@ -82,6 +82,30 @@ export const BAT_FLAP_TICKS = 8;
 /** Minimum ticks between two bat placements. */
 export const BAT_TO_BAT_TICKS = 300;
 
+/**
+ * Witch's hat, candies and hearts (spec 002, technical considerations 2.6).
+ * Own Rng streams via HAT_SALT and CANDY_SALT. The hat floats at jump height
+ * (its top is HAT_TOP_ABOVE_GROUND px above the ground) so only an airborne
+ * dino reaches it; the first hat comes at HAT_FIRST_TICK (30 s), later ones
+ * after HAT_RESPAWN_TICKS (inclusive). Candies come every CANDY_INTERVAL_TICKS
+ * (inclusive) once candy time is on. HAT_CLEAR_TICKS and CANDY_CLEAR_PX keep
+ * them away from obstacles and bats.
+ */
+export const HAT_SALT = 0x4a7c0de;
+export const HAT_FIRST_TICK = 1800;
+export const HAT_RESPAWN_TICKS = [900, 1500] as const;
+export const HAT_TOP_ABOVE_GROUND = 110;
+export const HAT_CLEAR_TICKS = 60;
+export const CANDY_SALT = 0xca9d1e5;
+export const CANDY_INTERVAL_TICKS = [240, 480] as const;
+export const CANDY_CLEAR_PX = 80;
+/** Most hearts the player can hold. */
+export const MAX_HEARTS = 3;
+/** Protection after losing a heart: 1.5 s of ticks. */
+export const INVULN_TICKS = 90;
+/** The dino alternates hidden and visible in blocks of this many ticks while protected. */
+export const INVULN_BLINK_TICKS = 5;
+
 /** Top of the ground line, in logical px. */
 export const GROUND_Y = 260;
 
@@ -187,4 +211,16 @@ export const HUD = {
   charWidth: 10,
   /** Space between the end of the HI value and the start of the score. */
   hiGap: 20,
+  /** Top-left corner of the first heart. */
+  heartsX: 10,
+  heartsY: 10,
+  /** Space between two hearts. */
+  heartGap: 4,
+  /** Left edge and vertical middle of the "candy time" mark under the hearts. */
+  candyMarkX: 10,
+  candyMarkY: 36,
 } as const;
+
+/** The mark shown under the hearts while candy time is on. */
+export const CANDY_TIME_TEXT = 'candy time';
+export const CANDY_TIME_FONT = '10px monospace';

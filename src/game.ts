@@ -19,7 +19,7 @@ import {
   nextBatInterval,
   widenSpawnX,
 } from './bats.js';
-import { hasCollision } from './collision.js';
+import { hasCollision, intersects } from './collision.js';
 import { createBus } from './events.js';
 import {
   advanceObstacles,
@@ -39,6 +39,28 @@ import {
   isMilestone,
   scoreFromDistance,
 } from './score.js';
+import {
+  advanceCandies,
+  advanceHat,
+  candyRngStart,
+  canPlaceCandy,
+  canPlaceHat,
+  dinoVisible,
+  firstHatTick,
+  gainHeart,
+  hatAllowsSpawn,
+  hatRngStart,
+  isProtected,
+  loseHeart,
+  makeCandy,
+  makeHat,
+  nextCandyInterval,
+  nextHatDelay,
+  startProtection,
+  tickProtection,
+  widenSpawnXForCandy,
+  widenSpawnXForHat,
+} from './pickups.js';
 import { Sprites } from './sprites.js';
 import {
   BLINK_SCHEDULE,
@@ -52,12 +74,14 @@ import {
 } from './tuning.js';
 import type {
   Bat,
+  Candy,
   Dino,
   DinoPose,
   Game,
   GameDeps,
   GameEvent,
   GameState,
+  Hat,
   Intent,
   Obstacle,
   ObstacleKind,
@@ -115,6 +139,20 @@ interface RunState {
   readonly nextBatId: number;
   /** Tick of the last placed bat; null before the first. */
   readonly lastBatTick: number | null;
+  readonly hat: Hat | null;
+  /** The hat stream's uint32 state, separate from the bat and game streams. */
+  readonly hatRngState: number;
+  /** Tick at which the next hat is due (retried each tick until placed). */
+  readonly nextHatTick: number;
+  readonly candies: readonly Candy[];
+  /** The candy stream's uint32 state. */
+  readonly candyRngState: number;
+  /** Tick at which the next candy is due; infinite until the hat is caught. */
+  readonly nextCandyTick: number;
+  readonly nextCandyId: number;
+  readonly hearts: number;
+  readonly candyTime: boolean;
+  readonly invulnTicks: number;
 }
 
 /** What a step needs from `createGame`'s dependencies. */
@@ -172,6 +210,16 @@ function initialRun(deps: GameDeps): RunState {
     nextBatTick: Number.POSITIVE_INFINITY,
     nextBatId: 0,
     lastBatTick: null,
+    hat: null,
+    hatRngState: 0,
+    nextHatTick: Number.POSITIVE_INFINITY,
+    candies: [],
+    candyRngState: 0,
+    nextCandyTick: Number.POSITIVE_INFINITY,
+    nextCandyId: 0,
+    hearts: 0,
+    candyTime: false,
+    invulnTicks: 0,
   };
 }
 
@@ -207,6 +255,16 @@ function freshRun(seed: number, previous: RunState): RunState {
     nextBatTick,
     nextBatId: 0,
     lastBatTick: null,
+    hat: null,
+    hatRngState: hatRngStart(seed),
+    nextHatTick: firstHatTick(),
+    candies: [],
+    candyRngState: candyRngStart(seed),
+    nextCandyTick: Number.POSITIVE_INFINITY,
+    nextCandyId: 0,
+    hearts: 0,
+    candyTime: false,
+    invulnTicks: 0,
   };
 }
 
@@ -332,11 +390,17 @@ function project(run: RunState): GameState {
     dino: projectDino(run),
     obstacles: run.obstacles,
     bats: run.bats,
+    hat: run.hat,
+    candies: run.candies,
+    hearts: run.hearts,
+    candyTime: run.candyTime,
+    invulnTicks: run.invulnTicks,
     spawnLog: run.spawnLog,
     hud: {
       hint: hintFor(run.phase),
       gameOver: run.phase === 'dead',
       blinkVisible: isBlinkVisible(run),
+      dinoVisible: dinoVisible(run.invulnTicks),
     },
   };
 }
@@ -387,7 +451,7 @@ function stepObstacles(
 ): RunState {
   const obstacles = advanceObstacles(run.obstacles, speed);
   const nextSpawnX = run.nextSpawnX - speed;
-  if (!shouldSpawn(nextSpawnX)) {
+  if (!shouldSpawn(nextSpawnX) || !hatAllowsSpawn(run.hat, speed)) {
     return { ...run, obstacles, nextSpawnX };
   }
   const forcedKind = missingKind(
@@ -442,7 +506,11 @@ function stepBats(
     obstacles: run.obstacles,
     lastBatTick: run.lastBatTick ?? undefined,
   };
-  if (tick < run.nextBatTick || !canPlaceBat(request)) {
+  if (
+    tick < run.nextBatTick ||
+    !hatAllowsSpawn(run.hat, speed) ||
+    !canPlaceBat(request)
+  ) {
     return { ...run, bats };
   }
   const bat = makeBat(run.nextBatId, CANVAS.width, tick);
@@ -460,30 +528,138 @@ function stepBats(
 }
 
 /**
- * Step 9: on a hit the run ends on this same step. A score above `hi ?? 0` is
- * saved once and becomes `hi`; `die.highScore` is `hi` after the death (0 while
- * it is still null) and `isNewHighScore` is true exactly when it was saved.
+ * Hat and candy steps (after the bat spawn): scroll and drop both, place the
+ * due hat (never after a catch) and the due candy (only in candy time) at the
+ * right edge when the space allows, and widen the next pumpkin x past them.
+ * A hat that leaves uncaught draws its respawn delay from the hat stream.
+ */
+function stepPickups(
+  run: RunState,
+  tick: number,
+  speed: number,
+  events: GameEvent[],
+): RunState {
+  let next = run;
+  let hat = advanceHat(run.hat, speed);
+  if (run.hat !== null && hat === null) {
+    const [delay, hatRngState] = nextHatDelay(run.hatRngState);
+    next = { ...next, hatRngState, nextHatTick: tick + delay };
+  }
+  let candies = advanceCandies(run.candies, speed);
+  let nextSpawnX = run.nextSpawnX;
+
+  const hatPlaceable = canPlaceHat({
+    tick,
+    speed,
+    obstacles: run.obstacles,
+    bats: run.bats,
+    dueTick: next.nextHatTick,
+    caught: run.candyTime,
+    hatOnScreen: hat !== null,
+  });
+  if (hatPlaceable) {
+    hat = makeHat(CANVAS.width);
+    nextSpawnX = widenSpawnXForHat(nextSpawnX, hat, speed);
+    events.push({ type: 'hatSpawn', hat });
+  }
+
+  let { nextCandyId, nextCandyTick, candyRngState } = next;
+  if (
+    tick >= nextCandyTick &&
+    canPlaceCandy({
+      candyTime: run.candyTime,
+      obstacles: run.obstacles,
+      bats: run.bats,
+    })
+  ) {
+    const candy = makeCandy(nextCandyId, CANVAS.width);
+    const [interval, after] = nextCandyInterval(candyRngState);
+    candyRngState = after;
+    nextCandyTick = tick + interval;
+    nextCandyId += 1;
+    candies = [...candies, candy];
+    nextSpawnX = widenSpawnXForCandy(nextSpawnX, candy);
+    events.push({ type: 'candySpawn', candy });
+  }
+  return {
+    ...next,
+    hat,
+    candies,
+    nextSpawnX,
+    nextCandyId,
+    nextCandyTick,
+    candyRngState,
+  };
+}
+
+/**
+ * Collision sub-steps in order (technical considerations 2.6): catch the hat
+ * (candy time on, first candy scheduled from the candy stream), eat candies,
+ * then, when `collisions` is on, the hit test over pumpkins and bats. A hit is
+ * ignored while protected; with a heart it costs one and starts protection
+ * (no `die`); with none the run ends, saving a new high score once (step 9).
  */
 function stepCollision(
   run: RunState,
+  tick: number,
   events: GameEvent[],
   deps: StepDeps,
 ): RunState {
-  if (!hasCollision(projectDino(run), [...run.obstacles, ...run.bats])) {
-    return run;
+  const dino = projectDino(run);
+  let current = run;
+
+  if (current.hat !== null && intersects(dino.hitbox, current.hat.hitbox)) {
+    const [interval, candyRngState] = nextCandyInterval(current.candyRngState);
+    current = {
+      ...current,
+      hat: null,
+      candyTime: true,
+      candyRngState,
+      nextCandyTick: tick + interval,
+    };
+    events.push({ type: 'hatCaught' });
   }
-  const isNewHighScore = beatsHighScore(run.score, run.hi);
+
+  const eaten = current.candies.filter((c) =>
+    intersects(dino.hitbox, c.hitbox),
+  );
+  if (eaten.length > 0) {
+    let hearts = current.hearts;
+    eaten.forEach(() => {
+      hearts = gainHeart(hearts);
+      events.push({ type: 'candyEaten', hearts });
+    });
+    current = {
+      ...current,
+      hearts,
+      candies: current.candies.filter((c) => !eaten.includes(c)),
+    };
+  }
+
+  if (
+    !deps.collisions ||
+    isProtected(current.invulnTicks) ||
+    !hasCollision(dino, [...current.obstacles, ...current.bats])
+  ) {
+    return current;
+  }
+  if (current.hearts > 0) {
+    const hearts = loseHeart(current.hearts);
+    events.push({ type: 'heartLost', hearts });
+    return { ...current, hearts, invulnTicks: startProtection() };
+  }
+  const isNewHighScore = beatsHighScore(current.score, current.hi);
   if (isNewHighScore) {
-    deps.saveHighScore(run.score);
+    deps.saveHighScore(current.score);
   }
-  const hi = isNewHighScore ? run.score : run.hi;
+  const hi = isNewHighScore ? current.score : current.hi;
   events.push({
     type: 'die',
-    score: run.score,
+    score: current.score,
     highScore: hi ?? 0,
     isNewHighScore,
   });
-  return { ...run, phase: 'dead', hi };
+  return { ...current, phase: 'dead', hi };
 }
 
 /** Steps 3 to 11 for a running run. */
@@ -530,8 +706,13 @@ function stepRunning(
   }
 
   // Steps 6 and 7: obstacles move, leave, and spawn.
-  const spawned = stepBats(
-    stepObstacles(run, tick, speed, events),
+  // The protection countdown runs first, so a hit this step sees this tick's value.
+  const counted: RunState = {
+    ...run,
+    invulnTicks: tickProtection(run.invulnTicks),
+  };
+  const spawned = stepPickups(
+    stepBats(stepObstacles(counted, tick, speed, events), tick, speed, events),
     tick,
     speed,
     events,
@@ -561,7 +742,7 @@ function stepRunning(
 
   // Step 9: collision, skipped when `collisions` is false. A hit sets
   // `phase 'dead'`, which makes the pose `'hit'` in `project`.
-  const checked = deps.collisions ? stepCollision(moved, events, deps) : moved;
+  const checked = stepCollision(moved, tick, events, deps);
 
   // Step 10: animation fields (the HUD and pose are derived in `project`).
   // The run frame holds while airborne, judged after this step's physics.

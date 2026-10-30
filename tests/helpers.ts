@@ -178,10 +178,13 @@ export interface PlayBotOptions {
   /** Hold duck while a bat is about to reach the dino (default false). */
   readonly duckBats?: boolean;
   /**
-   * Jump for the witch's hat. Accepted and ignored until slice 5 adds hats;
-   * it is part of the signature now so tests need not change then.
+   * Jump for the witch's hat: pressed when the hat's middle is half a jump's
+   * travel from the dino's middle, so the peak of the jump meets it. Pumpkins
+   * still get their jumps; a pumpkin jump that is already under way may catch it.
    */
   readonly catchHat?: boolean;
+  /** Stop as soon as this holds for the live view (checked before each step). */
+  readonly stopWhen?: (state: GameState) => boolean;
 }
 
 export interface PlayBotResult {
@@ -217,6 +220,7 @@ export function playBot(
   let ducking = false;
   while (game.view().tick < ticks && game.view().phase === 'running') {
     const s = game.view();
+    if (options.stopWhen?.(s) === true) break;
     const dinoMid = s.dino.hitbox.x + s.dino.hitbox.width / 2;
     const group = nextGroupAhead(s);
     const lead = group[0];
@@ -230,6 +234,17 @@ export function playBot(
       ) {
         game.dispatch('primary');
         jumped.set(lead.group, group.length);
+      }
+    }
+    if (options.catchHat === true && s.hat !== null) {
+      const hatMid = s.hat.hitbox.x + s.hat.hitbox.width / 2;
+      if (
+        s.dino.onGround &&
+        !ducking &&
+        hatMid - dinoMid <= (s.speed * JUMP_DURATION_TICKS) / 2 &&
+        hatMid > dinoMid
+      ) {
+        game.dispatch('primary');
       }
     }
     if (options.duckBats === true) {

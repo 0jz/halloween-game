@@ -9,7 +9,14 @@
 import { assertNever } from './assert.js';
 import { formatScore } from './score.js';
 import { Sprites, obstacleSprite, type Sprite } from './sprites.js';
-import { CANVAS, GROUND_Y, HUD, PALETTE } from './tuning.js';
+import {
+  CANDY_TIME_FONT,
+  CANDY_TIME_TEXT,
+  CANVAS,
+  GROUND_Y,
+  HUD,
+  PALETTE,
+} from './tuning.js';
 import type {
   DrawContext,
   GameState,
@@ -138,17 +145,53 @@ export const drawBats: LayerDraw = (ctx, state) => {
   }
 };
 
-/** Every obstacle at its state position, its sprite chosen from `kind`, then the bats. */
+/** The witch's hat, when there is one, and every candy at its state position. */
+export const drawPickups: LayerDraw = (ctx, state) => {
+  if (state.hat !== null) {
+    drawSprite(ctx, Sprites.hat, state.hat.x, state.hat.y);
+  }
+  for (const candy of state.candies) {
+    drawSprite(ctx, Sprites.candy, candy.x, candy.y);
+  }
+};
+
+/** Every obstacle at its state position, its sprite chosen from `kind`, then the bats and pickups. */
 export const drawObstacles: LayerDraw = (ctx, state, frame) => {
   for (const obstacle of state.obstacles) {
     drawSprite(ctx, obstacleSprite(obstacle.kind), obstacle.x, obstacle.y);
   }
   drawBats(ctx, state, frame);
+  drawPickups(ctx, state, frame);
 };
 
 /** The dinosaur at its state position, its sprite chosen from `pose` and `frame`. */
 export const drawDino: LayerDraw = (ctx, state) => {
+  if (!state.hud.dinoVisible) {
+    return;
+  }
   drawSprite(ctx, dinoSprite(state.dino), state.dino.x, state.dino.y);
+};
+
+/**
+ * One heart per `state.hearts` top-left, in accent (the sprite's glow runs),
+ * and a small "candy time" mark under them while `state.candyTime` is set.
+ */
+export const drawHearts: LayerDraw = (ctx, state) => {
+  for (let i = 0; i < state.hearts; i += 1) {
+    drawSprite(
+      ctx,
+      Sprites.heart,
+      HUD.heartsX + i * (Sprites.heart.width + HUD.heartGap),
+      HUD.heartsY,
+    );
+  }
+  if (state.candyTime) {
+    ctx.fillStyle = PALETTE.accent;
+    ctx.font = CANDY_TIME_FONT;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(CANDY_TIME_TEXT, HUD.candyMarkX, HUD.candyMarkY);
+  }
 };
 
 /**
@@ -158,7 +201,8 @@ export const drawDino: LayerDraw = (ctx, state) => {
  * score is hidden while blinking; the HI stays steady. With no `measureText`,
  * the score's width is its length times `HUD.charWidth` (monospace font).
  */
-export const drawScore: LayerDraw = (ctx, state) => {
+export const drawScore: LayerDraw = (ctx, state, frame) => {
+  drawHearts(ctx, state, frame);
   const score = formatScore(state.score);
   ctx.fillStyle = PALETTE.fg;
   ctx.font = HUD_FONT;
