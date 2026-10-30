@@ -1,6 +1,6 @@
 // Pure sprite data: hand-drawn ASCII bitmaps, one character per logical pixel
-// ('#' is a pixel, '.' is empty), with an inset hitbox and the horizontal pixel
-// runs render.ts fills. Width, height and runs derive from the bitmap once, at
+// ('#' is a pixel, 'o' a glowing pixel, '.' is empty), with an inset hitbox and
+// the horizontal pixel runs render.ts fills. Width, height and runs derive from the bitmap once, at
 // module load. Later slices add sprites to `Sprites` through `makeSprite`.
 
 import { assertNever } from './assert.js';
@@ -14,18 +14,24 @@ export interface Sprite {
   readonly hitbox: Rect;
   /** Horizontal runs of '#' per row, relative to the sprite's top-left corner, each 1 px high. */
   readonly runs: readonly Rect[];
+  /** Horizontal runs of 'o' (glow) per row, relative to the top-left corner; empty without 'o'. */
+  readonly glowRuns: readonly Rect[];
 }
 
 const PIXEL = '#';
+const GLOW = 'o';
 const EMPTY = '.';
 
-/** The horizontal runs of '#' in each row of a bitmap, left to right, top to bottom. */
-export function computeRuns(bitmap: readonly string[]): readonly Rect[] {
+/** The horizontal runs of `mark` (default '#') in each row of a bitmap, left to right, top to bottom. */
+export function computeRuns(
+  bitmap: readonly string[],
+  mark: string = PIXEL,
+): readonly Rect[] {
   const runs: Rect[] = [];
   bitmap.forEach((row, y) => {
     let start = -1;
     for (let x = 0; x <= row.length; x += 1) {
-      const isPixel = x < row.length && row[x] === PIXEL;
+      const isPixel = x < row.length && row[x] === mark;
       if (isPixel && start < 0) {
         start = x;
       } else if (!isPixel && start >= 0) {
@@ -39,7 +45,7 @@ export function computeRuns(bitmap: readonly string[]): readonly Rect[] {
 
 /**
  * Builds a sprite from its bitmap and hitbox. Throws on a malformed bitmap
- * (empty, ragged rows, characters other than '#' and '.') or a hitbox outside it.
+ * (empty, ragged rows, characters other than '#', 'o' and '.') or a hitbox outside it.
  */
 export function makeSprite(bitmap: readonly string[], hitbox: Rect): Sprite {
   const width = bitmap[0]?.length ?? 0;
@@ -54,9 +60,9 @@ export function makeSprite(bitmap: readonly string[], hitbox: Rect): Sprite {
       );
     }
     for (const ch of row) {
-      if (ch !== PIXEL && ch !== EMPTY) {
+      if (ch !== PIXEL && ch !== GLOW && ch !== EMPTY) {
         throw new Error(
-          `Sprite bitmap row ${String(y)} contains '${ch}'; use '${PIXEL}' or '${EMPTY}'`,
+          `Sprite bitmap row ${String(y)} contains '${ch}'; use '${PIXEL}', '${GLOW}' or '${EMPTY}'`,
         );
       }
     }
@@ -79,6 +85,7 @@ export function makeSprite(bitmap: readonly string[], hitbox: Rect): Sprite {
     height,
     hitbox: Object.freeze({ ...hitbox }),
     runs: Object.freeze(computeRuns(bitmap)),
+    glowRuns: Object.freeze(computeRuns(bitmap, GLOW)),
   };
 }
 
@@ -189,104 +196,105 @@ const DINO_HIT = [
 // rows. Shared by all dino frames so collision does not change between them.
 const DINO_HITBOX = { x: 12, y: 2, width: 22, height: 43 } as const;
 
-// 17 by 35, the small cactus of the original: a trunk with a rounded top and
-// one arm on each side, the left lower than the right.
-const CACTUS_SMALL = [
-  '.......###.......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####....#.',
-  '......#####...###',
-  '......#####...###',
-  '.#....#####...###',
-  '###...#####...###',
-  '###...#####...###',
-  '###...#####...###',
-  '###...#####...###',
-  '###...#####...###',
-  '###...###########',
-  '###...###########',
-  '###...###########',
-  '###...#####......',
-  '###########......',
-  '###########......',
-  '###########......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
-  '......#####......',
+// 17 by 35: two round pumpkins stacked, a short stem and curl on top, each with
+// vertical ridges. 'o' marks the carved faces (eyes and mouth), which render.ts
+// paints as a glow.
+const PUMPKIN_SMALL = [
+  '..........##.....',
+  '.......####......',
+  '........###......',
+  '....#########....',
+  '..#############..',
+  '.###############.',
+  '#####.#####.#####',
+  '####o.#####.o####',
+  '###ooo#####ooo###',
+  '#####.#####.#####',
+  '#####.#####.#####',
+  '###o#o#o#o#o#o###',
+  '###ooooooooooo###',
+  '#####o#o#o#o#####',
+  '#####.#####.#####',
+  '#####.#####.#####',
+  '.###############.',
+  '..#############..',
+  '....#########....',
+  '....#########....',
+  '..#############..',
+  '.###############.',
+  '#####.#####.#####',
+  '####o.#####.o####',
+  '###ooo#####ooo###',
+  '#####.#####.#####',
+  '#####.#####.#####',
+  '###o#o#o#o#o#o###',
+  '###ooooooooooo###',
+  '#####o#o#o#o#####',
+  '#####.#####.#####',
+  '#####.#####.#####',
+  '.###############.',
+  '..#############..',
+  '....#########....',
 ] as const;
 
-// 25 by 50, the large cactus: a wider trunk with two longer arms.
-const CACTUS_LARGE = [
-  '..........#####..........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######......##.',
-  '.........#######.....####',
-  '.........#######.....####',
-  '.........#######.....####',
-  '.##......#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....#######.....####',
-  '####.....################',
-  '####.....################',
-  '####.....################',
-  '####.....################',
-  '################.........',
-  '################.........',
-  '################.........',
-  '################.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
-  '.........#######.........',
+// 25 by 50, the large stack: two bigger pumpkins, the same carving.
+const PUMPKIN_LARGE = [
+  '............###.#........',
+  '...........####..........',
+  '.......###########.......',
+  '....#################....',
+  '..#####################..',
+  '.#######################.',
+  '######.#####.#####.######',
+  '######oo#########oo######',
+  '#####oooo#######oooo#####',
+  '####oooooo#####oooooo####',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '####o#o#o#o#o#o#o#o#o####',
+  '####ooooooooooooooooo####',
+  '####ooooooooooooooooo####',
+  '#####o#o#o#o#o#o#o#o#####',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '.#######################.',
+  '..#####################..',
+  '....#################....',
+  '.......###########.......',
+  '.......###########.......',
+  '....#################....',
+  '..#####################..',
+  '.#######################.',
+  '######.#####.#####.######',
+  '######oo#########oo######',
+  '#####oooo#######oooo#####',
+  '####oooooo#####oooooo####',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '####o#o#o#o#o#o#o#o#o####',
+  '####ooooooooooooooooo####',
+  '####ooooooooooooooooo####',
+  '#####o#o#o#o#o#o#o#o#####',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '######.#####.#####.######',
+  '.#######################.',
+  '..#####################..',
+  '....#################....',
+  '.......###########.......',
 ] as const;
 
-// Cactus hitboxes keep the trunk and the inner part of each arm but drop the
-// outer columns, so grazing an arm tip is a near miss (functional spec 2.5).
-const CACTUS_SMALL_HITBOX = { x: 2, y: 0, width: 13, height: 35 } as const;
-const CACTUS_LARGE_HITBOX = { x: 3, y: 0, width: 19, height: 50 } as const;
+// Pumpkin hitboxes drop the outer columns of the round body, so grazing the
+// edge is a near miss (functional spec 2.5).
+const PUMPKIN_SMALL_HITBOX = { x: 2, y: 0, width: 13, height: 35 } as const;
+const PUMPKIN_LARGE_HITBOX = { x: 3, y: 0, width: 19, height: 50 } as const;
 
 // 64 by 4: the ground line plus a few speckles; tiles seamlessly.
 const GROUND = [
@@ -296,13 +304,19 @@ const GROUND = [
   '..........#.........##..................#.........###...........',
 ] as const;
 
+const pumpkinSmall = makeSprite(PUMPKIN_SMALL, PUMPKIN_SMALL_HITBOX);
+const pumpkinLarge = makeSprite(PUMPKIN_LARGE, PUMPKIN_LARGE_HITBOX);
+
 export const Sprites = Object.freeze({
   dinoStand: makeSprite(DINO_STAND, DINO_HITBOX),
   dinoRun0: makeSprite(DINO_RUN_0, DINO_HITBOX),
   dinoRun1: makeSprite(DINO_RUN_1, DINO_HITBOX),
   dinoHit: makeSprite(DINO_HIT, DINO_HITBOX),
-  cactusSmall: makeSprite(CACTUS_SMALL, CACTUS_SMALL_HITBOX),
-  cactusLarge: makeSprite(CACTUS_LARGE, CACTUS_LARGE_HITBOX),
+  // The cactus names are the frozen contract; the pumpkin names alias them.
+  cactusSmall: pumpkinSmall,
+  cactusLarge: pumpkinLarge,
+  pumpkinSmall,
+  pumpkinLarge,
   // Decorative; nothing collides with the ground.
   ground: makeSprite(GROUND, { x: 0, y: 0, width: 64, height: 4 }),
 });

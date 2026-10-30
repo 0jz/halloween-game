@@ -118,7 +118,7 @@ function spriteRects(
   x: number,
   y: number,
 ): FillRect[] {
-  return sprite.runs.map((run) => ({
+  return [...sprite.runs, ...sprite.glowRuns].map((run) => ({
     op: 'fillRect',
     x: x + run.x,
     y: y + run.y,
@@ -472,6 +472,34 @@ describe('built-in drawers', () => {
       // 512.5 snaps to the pixel grid (spec 2.9).
       ...spriteRects(Sprites.cactusLarge, Math.round(large.x), large.y),
     ]);
+  });
+
+  it('fills obstacle runs with PALETTE.fg and their glow runs with PALETTE.accent', () => {
+    const state = stateWithCacti();
+    const ctx = fakeContext();
+    createLayerStack().run(ctx, state);
+
+    const styleOfRect = new Map<string, unknown>();
+    let style: unknown = null;
+    for (const c of ctx.calls) {
+      if (c.op === 'fillStyle') style = c.value;
+      else if (c.op === 'fillRect')
+        styleOfRect.set(`${String(c.x)},${String(c.y)},${String(c.w)}`, style);
+    }
+    for (const [sprite, x, y] of [
+      [Sprites.pumpkinSmall, 300, GROUND_Y - Sprites.pumpkinSmall.height],
+      [Sprites.pumpkinLarge, 513, GROUND_Y - Sprites.pumpkinLarge.height],
+    ] as const) {
+      expect(sprite.glowRuns.length).toBeGreaterThan(0);
+      for (const run of sprite.runs) {
+        const key = `${String(x + run.x)},${String(y + run.y)},${String(run.width)}`;
+        expect(styleOfRect.get(key)).toBe(PALETTE.fg);
+      }
+      for (const run of sprite.glowRuns) {
+        const key = `${String(x + run.x)},${String(y + run.y)},${String(run.width)}`;
+        expect(styleOfRect.get(key)).toBe(PALETTE.accent);
+      }
+    }
   });
 
   it('draws no obstacle rects when there are no obstacles', () => {

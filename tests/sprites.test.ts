@@ -6,24 +6,29 @@ import {
   obstacleSprite,
 } from '../src/sprites.js';
 import type { Sprite } from '../src/sprites.js';
+import type { Rect } from '../src/types.js';
 
 const allSprites = Object.entries(Sprites);
 
-/** Paints the runs onto a blank grid and returns it as bitmap rows. */
-function paintRuns(sprite: Sprite): string[] {
+/** Paints runs onto a blank grid with `mark` and returns it as bitmap rows. */
+function paintRuns(
+  sprite: Sprite,
+  runs: readonly Rect[] = sprite.runs,
+  mark = '#',
+): string[] {
   const grid = Array.from({ length: sprite.height }, () =>
     Array.from({ length: sprite.width }, () => '.'),
   );
-  for (const run of sprite.runs) {
+  for (const run of runs) {
     const row = grid[run.y];
     if (row === undefined)
       throw new Error(`run outside sprite at y ${String(run.y)}`);
     for (let x = run.x; x < run.x + run.width; x += 1) {
       if (x >= sprite.width)
         throw new Error(`run outside sprite at x ${String(x)}`);
-      if (row[x] === '#')
+      if (row[x] !== '.')
         throw new Error(`runs overlap at ${String(x)},${String(run.y)}`);
-      row[x] = '#';
+      row[x] = mark;
     }
   }
   return grid.map((row) => row.join(''));
@@ -44,13 +49,34 @@ describe('sprites', () => {
     },
   );
 
-  it.each(allSprites)('%s runs cover exactly the # pixels', (_name, sprite) => {
-    expect(sprite.runs.length).toBeGreaterThan(0);
-    expect(paintRuns(sprite)).toEqual([...sprite.bitmap]);
-    for (const run of sprite.runs) {
-      expect(run.height).toBe(1);
-      expect(run.width).toBeGreaterThan(0);
+  it.each(allSprites)(
+    '%s runs cover exactly the # pixels and glowRuns exactly the o pixels',
+    (_name, sprite) => {
+      expect(sprite.runs.length).toBeGreaterThan(0);
+      const solid = sprite.bitmap.map((row) => row.replaceAll('o', '.'));
+      const glow = sprite.bitmap.map((row) => row.replaceAll('#', '.'));
+      expect(paintRuns(sprite)).toEqual(solid);
+      expect(paintRuns(sprite, sprite.glowRuns, 'o')).toEqual(glow);
+      for (const run of [...sprite.runs, ...sprite.glowRuns]) {
+        expect(run.height).toBe(1);
+        expect(run.width).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it('only the pumpkins glow; every other sprite has empty glowRuns', () => {
+    for (const [name, sprite] of allSprites) {
+      if (name.startsWith('pumpkin') || name.startsWith('cactus')) {
+        expect(sprite.glowRuns.length).toBeGreaterThan(0);
+      } else {
+        expect(sprite.glowRuns).toEqual([]);
+      }
     }
+  });
+
+  it('the pumpkin names alias the frozen cactus names', () => {
+    expect(Sprites.pumpkinSmall).toBe(Sprites.cactusSmall);
+    expect(Sprites.pumpkinLarge).toBe(Sprites.cactusLarge);
   });
 
   it.each(allSprites)('%s hitbox lies inside the sprite', (_name, sprite) => {
@@ -131,39 +157,81 @@ describe('sprites', () => {
   });
 
   it.each([
-    ['cactusSmall', Sprites.cactusSmall, 17, 35],
-    ['cactusLarge', Sprites.cactusLarge, 25, 50],
-  ] as const)('%s is %i by %i', (_name, cactus, width, height) => {
-    expect(cactus.width).toBe(width);
-    expect(cactus.height).toBe(height);
-  });
+    [
+      'cactusSmall',
+      Sprites.cactusSmall,
+      17,
+      35,
+      { x: 2, y: 0, width: 13, height: 35 },
+    ],
+    [
+      'cactusLarge',
+      Sprites.cactusLarge,
+      25,
+      50,
+      { x: 3, y: 0, width: 19, height: 50 },
+    ],
+  ] as const)(
+    '%s is %i by %i with an unchanged hitbox',
+    (_name, pumpkin, width, height, hitbox) => {
+      expect(pumpkin.width).toBe(width);
+      expect(pumpkin.height).toBe(height);
+      expect(pumpkin.hitbox).toEqual(hitbox);
+    },
+  );
 
   it.each([
     ['cactusSmall', Sprites.cactusSmall],
     ['cactusLarge', Sprites.cactusLarge],
   ] as const)(
-    '%s stands on its base and its hitbox excludes the arm tips',
-    (_name, cactus) => {
-      const { hitbox } = cactus;
-      // The trunk reaches the bottom row, so the cactus sits on the ground.
-      expect(cactus.bitmap[cactus.height - 1]).toContain('#');
-      expect(hitbox.y + hitbox.height).toBe(cactus.height);
-      // Each arm reaches the outer column; those tip pixels lie outside the hitbox.
-      const column = (x: number): boolean =>
-        cactus.bitmap.some((row) => row[x] === '#');
-      expect(column(0)).toBe(true);
-      expect(column(cactus.width - 1)).toBe(true);
+    '%s stands on the ground and its hitbox excludes the outer columns',
+    (_name, pumpkin) => {
+      const { hitbox } = pumpkin;
+      // The bottom pumpkin's round base fills the last row, so it sits on the ground.
+      const bottom = pumpkin.bitmap[pumpkin.height - 1] ?? '';
+      expect(bottom.replaceAll('.', '').length).toBeGreaterThanOrEqual(9);
+      expect(hitbox.y + hitbox.height).toBe(pumpkin.height);
       expect(hitbox.x).toBeGreaterThan(0);
-      expect(hitbox.x + hitbox.width).toBeLessThan(cactus.width);
-      // The whole trunk (the full-height columns) is inside the hitbox.
-      const trunk = [...Array(cactus.width).keys()].filter((x) =>
-        cactus.bitmap.slice(1).every((row) => row[x] === '#'),
-      );
-      expect(trunk.length).toBeGreaterThan(0);
-      for (const x of trunk) {
-        expect(x).toBeGreaterThanOrEqual(hitbox.x);
-        expect(x).toBeLessThan(hitbox.x + hitbox.width);
+      expect(hitbox.x + hitbox.width).toBeLessThan(pumpkin.width);
+      // The carved face lies inside the hitbox.
+      for (const run of pumpkin.glowRuns) {
+        expect(run.x).toBeGreaterThanOrEqual(hitbox.x);
+        expect(run.x + run.width).toBeLessThanOrEqual(hitbox.x + hitbox.width);
       }
+    },
+  );
+
+  it.each([
+    ['cactusSmall', Sprites.cactusSmall, 20],
+    ['cactusLarge', Sprites.cactusLarge, 40],
+  ] as const)(
+    '%s has at least %i glow pixels so the carved faces are obvious',
+    (_name, pumpkin, minimum) => {
+      const glow = pumpkin.glowRuns.reduce((sum, run) => sum + run.width, 0);
+      expect(glow).toBeGreaterThanOrEqual(minimum);
+    },
+  );
+
+  it.each([
+    ['cactusSmall', Sprites.cactusSmall],
+    ['cactusLarge', Sprites.cactusLarge],
+  ] as const)(
+    '%s is two pumpkins stacked: a narrow waist between two wide bulges',
+    (_name, pumpkin) => {
+      const widths = pumpkin.bitmap.map(
+        (row) => row.lastIndexOf('#') - row.indexOf('#') + 1,
+      );
+      const from = Math.floor(pumpkin.height * 0.35);
+      const to = Math.ceil(pumpkin.height * 0.65);
+      const middle = widths.slice(from, to);
+      const waistWidth = Math.min(...middle);
+      const waist = from + middle.indexOf(waistWidth);
+      expect(Math.max(...widths.slice(0, waist))).toBeGreaterThanOrEqual(
+        waistWidth + 4,
+      );
+      expect(Math.max(...widths.slice(waist))).toBeGreaterThanOrEqual(
+        waistWidth + 4,
+      );
     },
   );
 
@@ -199,8 +267,25 @@ describe('makeSprite', () => {
     expect(() => makeSprite([], box)).toThrow();
   });
 
-  it('rejects characters other than # and .', () => {
+  it('rejects characters other than #, o and .', () => {
     expect(() => makeSprite(['# '], box)).toThrow(/row 0/);
+    expect(() => makeSprite(['#x'], box)).toThrow(/row 0/);
+  });
+
+  it('builds runs from # and glowRuns from o', () => {
+    const sprite = makeSprite(['#o.o', 'oo##'], box);
+    expect(sprite.runs).toEqual([
+      { x: 0, y: 0, width: 1, height: 1 },
+      { x: 2, y: 1, width: 2, height: 1 },
+    ]);
+    expect(sprite.glowRuns).toEqual([
+      { x: 1, y: 0, width: 1, height: 1 },
+      { x: 3, y: 0, width: 1, height: 1 },
+      { x: 0, y: 1, width: 2, height: 1 },
+    ]);
+    expect(sprite.width).toBe(4);
+    expect(sprite.height).toBe(2);
+    expect(makeSprite(['##'], box).glowRuns).toEqual([]);
   });
 
   it('rejects a hitbox outside the bitmap', () => {

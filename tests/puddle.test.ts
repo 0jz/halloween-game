@@ -41,8 +41,10 @@ function setup() {
   return { game, render, dispose };
 }
 
+// The pumpkin faces glow in PALETTE.accent too, so the puddle is told apart by
+// where it is drawn: the thin band on the ground line.
 const red = (frame: Frame) =>
-  frame.rects.filter((r) => r.style === PALETTE.accent);
+  frame.rects.filter((r) => r.style === PALETTE.accent && r.y > GROUND_Y - 6);
 const widthOf = (frame: Frame) => Math.max(0, ...red(frame).map((r) => r.w));
 
 /** Starts a run and lets it end at the first cactus (seed 42 never jumps). */
@@ -112,12 +114,26 @@ describe('red puddle on game over', () => {
     expect(widthOf(render())).toBeLessThan(PUDDLE.width);
   });
 
+  it('is drawn in PALETTE.accent, the single orange', () => {
+    const { game, render } = setup();
+    die(game);
+    for (let i = 0; i < PUDDLE.growFrames; i += 1) render();
+    const band = render().rects.filter(
+      (r) =>
+        r.y > GROUND_Y - 6 && r.y + r.h <= GROUND_Y && r.style !== PALETTE.fg,
+    );
+    expect(band.length).toBeGreaterThan(0);
+    for (const r of band) expect(r.style).toBe(PALETTE.accent);
+  });
+
   it('is painted before the ground and the dinosaur, so it reads as under them', () => {
     const { game, render } = setup();
     die(game);
     for (let i = 0; i < PUDDLE.growFrames; i += 1) render();
     const { rects } = render();
-    const firstRed = rects.findIndex((r) => r.style === PALETTE.accent);
+    const firstRed = rects.findIndex(
+      (r) => r.style === PALETTE.accent && r.y > GROUND_Y - 6,
+    );
     const firstGrey = rects.findIndex((r) => r.style === PALETTE.fg);
     expect(firstRed).toBeGreaterThanOrEqual(0);
     expect(firstRed).toBeLessThan(firstGrey);

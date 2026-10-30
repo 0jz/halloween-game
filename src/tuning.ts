@@ -12,14 +12,52 @@ export const STEP_MS = 1000 / 60;
 export const CANVAS = { width: 800, height: 300 } as const;
 
 /**
- * The look: near-white background, dark grey foreground, and one red accent
- * used only for the game-over puddle (functional spec 2.9).
+ * The Halloween look (spec 002, technical considerations 2.1): dusk navy
+ * background, pale grey foreground, one orange accent, plus mid grey-blue for
+ * clouds and stars, an off-white moon and a near-black navy night overlay.
  */
 export const PALETTE = {
-  bg: '#f7f7f7',
-  fg: '#535353',
-  accent: '#c4302b',
+  bg: '#1a1c3a',
+  fg: '#d0d3e0',
+  accent: '#ff7a1a',
+  dim: '#5a6088',
+  moon: '#f2efe2',
+  skyDark: '#05060f',
 } as const;
+
+/** Night sky milestones, in running ticks (60 per second). Spec 002, 2.2. */
+export const NIGHT_DARKER_TICK = 1800;
+export const NIGHT_STARS_TICK = 2700;
+export const NIGHT_EYES_TICK = 3600;
+/** The sky is fully dark here (90 s). */
+export const NIGHT_DARKEST_TICK = 5400;
+
+/** Stars shown once NIGHT_STARS_TICK passes: STARS_BASE, growing by up to STARS_EXTRA. */
+export const STARS_BASE = 12;
+export const STARS_EXTRA = 24;
+
+/** Overlay opacity at full night. */
+export const NIGHT_MAX_ALPHA = 0.6;
+
+/** Clouds drifting in the sky. */
+export const CLOUD_COUNT = 4;
+
+/** Pairs of glowing eyes in the dark. */
+export const EYES_PAIRS = 3;
+
+/** Salts for feature-owned visual Rngs: `createRng((seed ^ SALT) >>> 0)`. */
+export const NIGHT_SALT = 0x5eed5eed;
+export const REACTION_SALT = 0xfa11fa11;
+
+/** Screen shake peak offsets, in logical px, and their lengths in render frames. */
+export const SHAKE_LAND_PX = 3;
+export const SHAKE_DIE_PX = 6;
+export const SHAKE_LAND_FRAMES = 12;
+export const SHAKE_DIE_FRAMES = 18;
+
+/** Death flash: peak opacity and length in render frames. */
+export const FLASH_ALPHA = 0.25;
+export const FLASH_FRAMES = 10;
 
 /**
  * The game-over puddle (functional spec 2.5): full width in logical px, and how

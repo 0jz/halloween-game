@@ -77,7 +77,8 @@ export interface Renderer {
 const NO_CAMERA: CameraFn = () => ({ x: 0, y: 0 });
 
 /**
- * Fills a sprite's pixel runs with `PALETTE.fg`, its top-left corner at (x, y)
+ * Fills a sprite's pixel runs with `PALETTE.fg` and its glow runs with
+ * `PALETTE.accent`, its top-left corner at (x, y)
  * snapped to whole logical pixels. State keeps exact float positions; only the
  * drawing is snapped, so no run lands between pixels and gets anti-aliased
  * grey edges (functional spec 2.9: one dark grey on one near-white).
@@ -92,6 +93,10 @@ export function drawSprite(
   const originY = Math.round(y);
   ctx.fillStyle = PALETTE.fg;
   for (const run of sprite.runs) {
+    ctx.fillRect(originX + run.x, originY + run.y, run.width, run.height);
+  }
+  ctx.fillStyle = PALETTE.accent;
+  for (const run of sprite.glowRuns) {
     ctx.fillRect(originX + run.x, originY + run.y, run.width, run.height);
   }
 }
