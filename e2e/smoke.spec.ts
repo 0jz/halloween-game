@@ -21,6 +21,21 @@ test('the game boots, renders and plays in a real browser', async ({
     errors.push(`pageerror: ${error.message}`);
   });
 
+  // Counts every `keydown` listener registered on window, readable as
+  // `window.__keydownListeners`. Defined with defineProperty so no typings
+  // or casts are needed for the page-side hook.
+  await page.addInitScript(() => {
+    let count = 0;
+    const original = window.addEventListener.bind(window);
+    Object.defineProperty(window, 'addEventListener', {
+      value: (...args: Parameters<typeof original>) => {
+        if (args[0] === 'keydown') count += 1;
+        original(...args);
+      },
+    });
+    Object.defineProperty(window, '__keydownListeners', { get: () => count });
+  });
+
   await page.goto('/?seed=42');
 
   // 2. The canvas is 800 by 300, centred in the 1280-wide viewport, no horizontal scroll.
@@ -56,6 +71,14 @@ test('the game boots, renders and plays in a real browser', async ({
       });
     }),
   }));
+  const keydownListeners = (): Promise<unknown> =>
+    page.evaluate(() => {
+      const count: unknown = Reflect.get(window, '__keydownListeners');
+      return count;
+    });
+  // Booted: the game's own listener plus the probe just added.
+  const listenersAfterBoot = await keydownListeners();
+  expect(listenersAfterBoot).toBe(2);
   await page.keyboard.press('Space');
   // Start of the four-second death budget in step 6, taken at the press.
   const spacePressedAt = Date.now();
@@ -89,6 +112,13 @@ test('the game boots, renders and plays in a real browser', async ({
   const dead = await page.evaluate(() => window.__dino.state());
   expect(dead.score).toBeGreaterThan(0);
   expect(dead.hi).toBe(dead.score);
+
+  // Restarting must not attach another keyboard: one key press stays one
+  // intent however many runs came before (functional spec 2.7).
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => window.__dino.state().phase === 'running');
+  expect(await keydownListeners()).toBe(listenersAfterBoot);
+
   await page.reload();
   await page.waitForFunction(() => '__dino' in window);
   const reloaded = await page.evaluate(() => window.__dino.state());
