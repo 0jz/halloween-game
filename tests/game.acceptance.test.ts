@@ -807,6 +807,27 @@ describe('2.7 restarting', () => {
     expect(events).toEqual([{ type: 'restart', seed: 9 }]);
   });
 
+  it('restarts at the starting pace and tick 0, whatever pace the dying run had', () => {
+    const { game } = makeGame(undefined, { seeds: [5, 9] });
+    pressPrimary(game);
+    dieWithoutJumping(game);
+    const dead = game.state();
+    // The dying run had already sped up and counted ticks.
+    expect(dead.tick).toBeGreaterThan(0);
+    expect(dead.speed).toBeGreaterThan(START_SPEED);
+
+    pressPrimary(game);
+
+    expect(game.state().tick).toBe(0);
+    expect(game.state().speed).toBe(START_SPEED);
+
+    // The new run follows the pace ramp from its own tick 0.
+    game.tick(30);
+    const s = game.state();
+    expect(s.tick).toBe(30);
+    expect(s.speed).toBe(speedAt(30));
+  });
+
   it('draws exactly one new seed per restart', () => {
     const { game, randomSeed } = makeGame(undefined, { seeds: [5, 9] });
     pressPrimary(game);
