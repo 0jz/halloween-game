@@ -106,6 +106,19 @@ describe('hasCollision', () => {
     expect(hasCollision(dino, obstacles)).toBe(true);
   });
 
+  it('is false for a near miss: sprite boxes overlap but the hitboxes do not (spec 2.5)', () => {
+    const dino = groundDino();
+    // Leading edge of the cactus hitbox flush with the dino hitbox's right edge.
+    const x = dino.hitbox.x + dino.hitbox.width - CACTUS_SMALL_HITBOX.x;
+    const cactus = smallCactus(x);
+
+    // The drawn sprites overlap, so a check on sprite boxes would call it a crash...
+    expect(intersects(dino, cactus)).toBe(true);
+    // ...but there is daylight between the bodies, so the run goes on.
+    expect(intersects(dino.hitbox, cactus.hitbox)).toBe(false);
+    expect(hasCollision(dino, [cactus])).toBe(false);
+  });
+
   it('is false when the dino is airborne above a cactus', () => {
     const ground = groundDino();
     const lift = 60;

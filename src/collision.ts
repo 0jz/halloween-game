@@ -17,12 +17,16 @@ export function intersects(a: Rect, b: Rect): boolean {
 }
 
 /**
- * True when the dino intersects any obstacle in the list. Overlap is strict,
- * as in `intersects`, so a dino that only touches an obstacle's edge runs on.
+ * True when the dino's hitbox intersects any obstacle's hitbox. The hitboxes
+ * are inset from the drawn sprites, so a near miss is not a crash. Overlap is
+ * strict, as in `intersects`, so a dino that only touches an obstacle's edge
+ * runs on.
  */
 export function hasCollision(
   dino: Dino,
   obstacles: readonly Obstacle[],
 ): boolean {
-  return obstacles.some((obstacle) => intersects(dino, obstacle));
+  return obstacles.some((obstacle) =>
+    intersects(dino.hitbox, obstacle.hitbox),
+  );
 }
