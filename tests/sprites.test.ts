@@ -52,7 +52,7 @@ describe('sprites', () => {
   it.each(allSprites)(
     '%s runs cover exactly the # pixels and glowRuns exactly the o pixels',
     (_name, sprite) => {
-      expect(sprite.runs.length).toBeGreaterThan(0);
+      expect(sprite.runs.length + sprite.glowRuns.length).toBeGreaterThan(0);
       const solid = sprite.bitmap.map((row) => row.replaceAll('o', '.'));
       const glow = sprite.bitmap.map((row) => row.replaceAll('#', '.'));
       expect(paintRuns(sprite)).toEqual(solid);
@@ -64,9 +64,10 @@ describe('sprites', () => {
     },
   );
 
-  it('only the pumpkins glow; every other sprite has empty glowRuns', () => {
+  it('only the pumpkins, bats, hat, candy and heart glow; every other sprite has empty glowRuns', () => {
+    const glowing = ['pumpkin', 'cactus', 'bat', 'hat', 'candy', 'heart'];
     for (const [name, sprite] of allSprites) {
-      if (name.startsWith('pumpkin') || name.startsWith('cactus')) {
+      if (glowing.some((prefix) => name.startsWith(prefix))) {
         expect(sprite.glowRuns.length).toBeGreaterThan(0);
       } else {
         expect(sprite.glowRuns).toEqual([]);
@@ -243,6 +244,101 @@ describe('sprites', () => {
   it('the ground tile is a full-width line on top', () => {
     const ground = Sprites.ground;
     expect(ground.bitmap[0]).toBe('#'.repeat(ground.width));
+  });
+});
+
+describe('halloween sprites', () => {
+  const glowPixels = (sprite: Sprite): number =>
+    sprite.glowRuns.reduce((sum, run) => sum + run.width, 0);
+
+  it('exposes exactly the expected set of sprite names', () => {
+    expect(Object.keys(Sprites).sort()).toEqual(
+      [
+        'bat0',
+        'bat1',
+        'cactusLarge',
+        'cactusSmall',
+        'candy',
+        'dinoDuck0',
+        'dinoDuck1',
+        'dinoHit',
+        'dinoRun0',
+        'dinoRun1',
+        'dinoStand',
+        'ground',
+        'heart',
+        'hat',
+        'pumpkinLarge',
+        'pumpkinSmall',
+      ].sort(),
+    );
+  });
+
+  it.each([
+    ['dinoDuck0', Sprites.dinoDuck0],
+    ['dinoDuck1', Sprites.dinoDuck1],
+  ] as const)('%s is about 59 by 30 with a 24 px tall hitbox', (_n, duck) => {
+    expect(duck.width).toBeGreaterThanOrEqual(56);
+    expect(duck.width).toBeLessThanOrEqual(62);
+    expect(duck.height).toBe(30);
+    expect(duck.bitmap).toHaveLength(30);
+    expect(duck.hitbox.height).toBe(24);
+    expect(duck.hitbox.y).toBe(duck.height - 24);
+    expect(duck.hitbox.x).toBeGreaterThan(0);
+    expect(duck.hitbox.x + duck.hitbox.width).toBeLessThan(duck.width);
+  });
+
+  it('the two duck frames differ and share the same upper body', () => {
+    const { dinoDuck0, dinoDuck1 } = Sprites;
+    expect(dinoDuck0.bitmap).not.toEqual(dinoDuck1.bitmap);
+    expect(dinoDuck0.width).toBe(dinoDuck1.width);
+    expect(dinoDuck0.bitmap.slice(0, 24)).toEqual(
+      dinoDuck1.bitmap.slice(0, 24),
+    );
+    expect(dinoDuck0.hitbox).toEqual(dinoDuck1.hitbox);
+  });
+
+  it.each([
+    ['bat0', Sprites.bat0],
+    ['bat1', Sprites.bat1],
+  ] as const)(
+    '%s is about 44 by 52, full height hitbox inset on both sides, orange eyes',
+    (_n, bat) => {
+      expect(bat.width).toBe(44);
+      expect(bat.height).toBe(52);
+      expect(bat.hitbox.y).toBe(0);
+      expect(bat.hitbox.height).toBe(52);
+      expect(bat.hitbox.x).toBeGreaterThanOrEqual(2);
+      expect(bat.hitbox.x + bat.hitbox.width).toBeLessThanOrEqual(
+        bat.width - 2,
+      );
+      expect(glowPixels(bat)).toBeGreaterThan(0);
+    },
+  );
+
+  it('the two bat frames differ (wings up, wings down)', () => {
+    expect(Sprites.bat0.bitmap).not.toEqual(Sprites.bat1.bitmap);
+    expect(Sprites.bat0.width).toBe(Sprites.bat1.width);
+    expect(Sprites.bat0.height).toBe(Sprites.bat1.height);
+  });
+
+  it.each([
+    ['hat', Sprites.hat, 24, 26, 8],
+    ['candy', Sprites.candy, 14, 10, 20],
+    ['heart', Sprites.heart, 12, 11, 40],
+  ] as const)(
+    '%s is %i by %i, has glow and a full-sprite hitbox',
+    (_n, sprite, width, height, minGlow) => {
+      expect(sprite.width).toBe(width);
+      expect(sprite.height).toBe(height);
+      expect(sprite.hitbox).toEqual({ x: 0, y: 0, width, height });
+      expect(glowPixels(sprite)).toBeGreaterThanOrEqual(minGlow);
+    },
+  );
+
+  it('the candy has a pale wrapper twist and the heart is all glow', () => {
+    expect(Sprites.candy.runs.length).toBeGreaterThan(0);
+    expect(Sprites.heart.runs).toEqual([]);
   });
 });
 

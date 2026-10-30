@@ -304,6 +304,175 @@ const GROUND = [
   '..........#.........##..................#.........###...........',
 ] as const;
 
+/** Mirrors each half-row about its right edge: 'ab' becomes 'abba'. */
+function mirror(half: readonly string[]): string[] {
+  return half.map((row) => row + row.split('').reverse().join(''));
+}
+
+/** Doubles every pixel in both directions, like the hand-drawn dino. */
+function double(rows: readonly string[]): string[] {
+  return rows.flatMap((row) => {
+    const wide = row
+      .split('')
+      .map((ch) => ch + ch)
+      .join('');
+    return [wide, wide];
+  });
+}
+
+// 60 by 30, the ducking dino: head forward and low, body flat, tail behind,
+// legs alternating. Drawn at half size and doubled.
+const DUCK_UPPER = [
+  '.....................#########',
+  '.....................##.######',
+  '.....................#########',
+  '.....................######...',
+  '.........###############......',
+  '.......##################.....',
+  '###..#####################....',
+  '.#########################....',
+  '..########################....',
+  '....######################....',
+  '......####################....',
+  '........##############........',
+  '..........####....####........',
+] as const;
+
+const DINO_DUCK_0 = double([
+  ...DUCK_UPPER,
+  '..........####................',
+  '..........######..............',
+]);
+
+const DINO_DUCK_1 = double([
+  ...DUCK_UPPER,
+  '..........##......####........',
+  '..................######......',
+]);
+
+// Height 24 from the bottom; drops the transparent tail and nose edge columns.
+const DINO_DUCK_HITBOX = { x: 6, y: 6, width: 52, height: 24 } as const;
+
+// 44 by 52: a bat with orange eyes, wings up (0) and wings down (1).
+const BAT_0 = double(
+  mirror([
+    '##.........',
+    '###........',
+    '####....#..',
+    '#####...##.',
+    '######..###',
+    '#######o###',
+    '###########',
+    '###########',
+    '.##########',
+    '..#########',
+    '...########',
+    '....#######',
+    '.....######',
+    '......#####',
+    '.......####',
+    '........###',
+    '........###',
+    '.........##',
+    '.........##',
+    '.........##',
+    '.........##',
+    '.........##',
+    '.........##',
+    '.........##',
+    '.........##',
+    '.........#.',
+  ]),
+);
+
+const BAT_1 = double(
+  mirror([
+    '........#..',
+    '........##.',
+    '........###',
+    '........###',
+    '.......o###',
+    '.......####',
+    '.....######',
+    '...########',
+    '..#########',
+    '.##########',
+    '###########',
+    '###########',
+    '########.##',
+    '#######..##',
+    '######...##',
+    '#####....##',
+    '#####....##',
+    '####.....##',
+    '####.....##',
+    '###......##',
+    '###......##',
+    '##.......##',
+    '##.......##',
+    '#........##',
+    '#........##',
+    '#........#.',
+  ]),
+);
+
+const BAT_HITBOX = { x: 3, y: 0, width: 38, height: 52 } as const;
+
+// 24 by 26: a witch's hat, pale cone and brim with an orange band.
+const HAT = double(
+  mirror([
+    '.....#',
+    '.....#',
+    '....##',
+    '....##',
+    '...###',
+    '...###',
+    '..####',
+    '..oooo',
+    '..oooo',
+    '..####',
+    '.#####',
+    '######',
+    '######',
+  ]),
+);
+
+// 14 by 10: a wrapped candy, orange body and pale wrapper twists.
+const CANDY = mirror([
+  '#......',
+  '##.....',
+  '###.ooo',
+  '.##oooo',
+  '..#oooo',
+  '..#oooo',
+  '.##oooo',
+  '###.ooo',
+  '##.....',
+  '#......',
+]);
+
+// 12 by 11: the HUD heart, all orange.
+const HEART = mirror([
+  '.ooo..',
+  'oooooo',
+  'oooooo',
+  'oooooo',
+  'oooooo',
+  '.ooooo',
+  '..oooo',
+  '...ooo',
+  '....oo',
+  '.....o',
+  '.....o',
+]);
+
+const fullBox = (rows: readonly string[]): Rect => ({
+  x: 0,
+  y: 0,
+  width: rows[0]?.length ?? 0,
+  height: rows.length,
+});
+
 const pumpkinSmall = makeSprite(PUMPKIN_SMALL, PUMPKIN_SMALL_HITBOX);
 const pumpkinLarge = makeSprite(PUMPKIN_LARGE, PUMPKIN_LARGE_HITBOX);
 
@@ -317,6 +486,13 @@ export const Sprites = Object.freeze({
   cactusLarge: pumpkinLarge,
   pumpkinSmall,
   pumpkinLarge,
+  dinoDuck0: makeSprite(DINO_DUCK_0, DINO_DUCK_HITBOX),
+  dinoDuck1: makeSprite(DINO_DUCK_1, DINO_DUCK_HITBOX),
+  bat0: makeSprite(BAT_0, BAT_HITBOX),
+  bat1: makeSprite(BAT_1, BAT_HITBOX),
+  hat: makeSprite(HAT, fullBox(HAT)),
+  candy: makeSprite(CANDY, fullBox(CANDY)),
+  heart: makeSprite(HEART, fullBox(HEART)),
   // Decorative; nothing collides with the ground.
   ground: makeSprite(GROUND, { x: 0, y: 0, width: 64, height: 4 }),
 });
