@@ -26,7 +26,5 @@ export function hasCollision(
   dino: Dino,
   obstacles: readonly Obstacle[],
 ): boolean {
-  return obstacles.some((obstacle) =>
-    intersects(dino.hitbox, obstacle.hitbox),
-  );
+  return obstacles.some((obstacle) => intersects(dino.hitbox, obstacle.hitbox));
 }
