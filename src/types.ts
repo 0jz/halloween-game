@@ -1,9 +1,9 @@
 // Shapes shared by several modules. The names and shapes below are the frozen
 // testing contract (architecture section 3): add to them, never rename or remove.
 
-export type Intent = 'primary';
+export type Intent = 'primary' | 'duckDown' | 'duckUp';
 export type Phase = 'idle' | 'running' | 'dead';
-export type DinoPose = 'stand' | 'run' | 'hit';
+export type DinoPose = 'stand' | 'run' | 'hit' | 'duck';
 export type ObstacleKind = 'small' | 'large';
 export type LayerName =
   'background' | 'parallax' | 'world' | 'foreground' | 'hud';
@@ -30,6 +30,12 @@ export interface Obstacle extends Rect {
   readonly hitbox: Rect;
 }
 
+export interface Bat extends Rect {
+  readonly id: number; // 0, 1, 2 … within a run; resets on start and restart
+  readonly wing: 0 | 1; // two-frame flap, derived from the tick
+  readonly hitbox: Rect;
+}
+
 export interface GameDeps {
   seed?: number | undefined; // from the URL; undefined means a random seed per run
   randomSeed: () => number; // main.ts: Math.random based; tests: a stub
@@ -48,6 +54,7 @@ export interface GameState {
   readonly hi: number | null; // null when no high score has ever been recorded
   readonly dino: Dino;
   readonly obstacles: readonly Obstacle[];
+  readonly bats: readonly Bat[];
   // one entry per obstacle, this run only
   readonly spawnLog: readonly {
     readonly kind: ObstacleKind;
@@ -75,7 +82,10 @@ export type GameEvent =
   | { type: 'tick'; tick: number }
   | { type: 'jump' }
   | { type: 'land' }
+  | { type: 'duckStart' }
+  | { type: 'duckEnd' }
   | { type: 'spawn'; obstacle: Obstacle }
+  | { type: 'batSpawn'; bat: Bat }
   | { type: 'milestone'; score: number }
   | { type: 'speedChange'; speed: number }
   | { type: 'die'; score: number; highScore: number; isNewHighScore: boolean }

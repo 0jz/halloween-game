@@ -4,6 +4,7 @@
 
 import { vi, type Mock } from 'vitest';
 import { createGame } from '../src/game.js';
+import { JUMP_DURATION_TICKS } from '../src/tuning.js';
 import type {
   DrawContext,
   Game,
@@ -11,6 +12,7 @@ import type {
   GameEvent,
   GameState,
   HighScoreStore,
+  Obstacle,
 } from '../src/types.js';
 
 /** An in-memory `HighScoreStore` whose `load` and `save` are spies. */
@@ -158,4 +160,94 @@ export function fakeContext(): FakeContext {
       calls.push({ op: 'restore' });
     },
   };
+}
+
+/** Dispatches one `duckDown` intent and runs the step that consumes it. */
+export function duckDown(game: Game): void {
+  game.dispatch('duckDown');
+  game.tick();
+}
+
+/** Dispatches one `duckUp` intent and runs the step that consumes it. */
+export function duckUp(game: Game): void {
+  game.dispatch('duckUp');
+  game.tick();
+}
+
+export interface PlayBotOptions {
+  /** Hold duck while a bat is about to reach the dino (default false). */
+  readonly duckBats?: boolean;
+  /**
+   * Jump for the witch's hat. Accepted and ignored until slice 5 adds hats;
+   * it is part of the signature now so tests need not change then.
+   */
+  readonly catchHat?: boolean;
+}
+
+export interface PlayBotResult {
+  /** Group number to group size, for every group the bot jumped. */
+  readonly jumped: Map<number, number>;
+  readonly jumps: number;
+}
+
+/** The obstacles of the nearest group whose trailing edge is still ahead of the dino's back. */
+function nextGroupAhead(state: GameState): readonly Obstacle[] {
+  const back = state.dino.hitbox.x;
+  const ahead = state.obstacles.filter(
+    (o) => o.hitbox.x + o.hitbox.width > back,
+  );
+  const first = ahead[0];
+  if (first === undefined) return [];
+  return ahead.filter((o) => o.group === first.group);
+}
+
+/**
+ * Plays a run until `ticks` or death: one well-timed jump per pumpkin group
+ * (pressed when the group's middle is half a jump's travel from the dino's
+ * middle) and, with `duckBats`, ducking from just before a bat reaches the
+ * dino until its trailing edge has passed. It never ducks while jumping.
+ */
+export function playBot(
+  game: Game,
+  ticks: number,
+  options: PlayBotOptions = {},
+): PlayBotResult {
+  const jumpEvents = collect(game, 'jump');
+  const jumped = new Map<number, number>();
+  let ducking = false;
+  while (game.view().tick < ticks && game.view().phase === 'running') {
+    const s = game.view();
+    const dinoMid = s.dino.hitbox.x + s.dino.hitbox.width / 2;
+    const group = nextGroupAhead(s);
+    const lead = group[0];
+    const tail = group.at(-1);
+    if (lead !== undefined && tail !== undefined && !jumped.has(lead.group)) {
+      const groupMid = (lead.hitbox.x + tail.hitbox.x + tail.hitbox.width) / 2;
+      if (
+        s.dino.onGround &&
+        !ducking &&
+        groupMid - dinoMid <= (s.speed * JUMP_DURATION_TICKS) / 2
+      ) {
+        game.dispatch('primary');
+        jumped.set(lead.group, group.length);
+      }
+    }
+    if (options.duckBats === true) {
+      // Duck from 12 ticks of travel out until the bat's trailing edge passes.
+      const needsDuck = s.bats.some(
+        (b) =>
+          b.hitbox.x + b.hitbox.width > s.dino.hitbox.x &&
+          b.hitbox.x - (s.dino.hitbox.x + s.dino.hitbox.width) <= s.speed * 12,
+      );
+      if (needsDuck && !ducking && s.dino.onGround) {
+        game.dispatch('duckDown');
+        ducking = true;
+      } else if (!needsDuck && ducking) {
+        game.dispatch('duckUp');
+        ducking = false;
+      }
+    }
+    game.tick();
+  }
+  return { jumped, jumps: jumpEvents.length };
 }

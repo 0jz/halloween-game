@@ -124,16 +124,26 @@ export function dinoSprite(dino: GameState['dino']): Sprite {
       return Sprites.dinoHit;
     case 'run':
       return dino.frame === 0 ? Sprites.dinoRun0 : Sprites.dinoRun1;
+    case 'duck':
+      return dino.frame === 0 ? Sprites.dinoDuck0 : Sprites.dinoDuck1;
     default:
       return assertNever(dino.pose);
   }
 }
 
-/** Every obstacle at its state position, its sprite chosen from `kind`. */
-export const drawObstacles: LayerDraw = (ctx, state) => {
+/** Every bat at its state position, wing frame from `bat.wing`; the eyes glow via `drawSprite`. */
+export const drawBats: LayerDraw = (ctx, state) => {
+  for (const bat of state.bats) {
+    drawSprite(ctx, bat.wing === 0 ? Sprites.bat0 : Sprites.bat1, bat.x, bat.y);
+  }
+};
+
+/** Every obstacle at its state position, its sprite chosen from `kind`, then the bats. */
+export const drawObstacles: LayerDraw = (ctx, state, frame) => {
   for (const obstacle of state.obstacles) {
     drawSprite(ctx, obstacleSprite(obstacle.kind), obstacle.x, obstacle.y);
   }
+  drawBats(ctx, state, frame);
 };
 
 /** The dinosaur at its state position, its sprite chosen from `pose` and `frame`. */
@@ -190,7 +200,7 @@ export const drawGameOver: LayerDraw = (ctx, state) => {
 
 /**
  * Creates the layer stack with the built-in drawers already registered through
- * `addLayer`: in `world`, ground, obstacles, then dino; in `hud`, score, hint, then game over.
+ * `addLayer`: in `world`, ground, obstacles, dino; in `hud`, score, hint, then game over.
  */
 export function createLayerStack(): LayerStack {
   const layers = new Map<LayerName, LayerDraw[]>(

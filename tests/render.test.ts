@@ -21,6 +21,7 @@ import {
   START_SPEED,
 } from '../src/tuning.js';
 import type {
+  Bat,
   GameState,
   LayerName,
   Obstacle,
@@ -55,6 +56,7 @@ function idleState(overrides: Partial<GameState> = {}): GameState {
       },
     },
     obstacles: [],
+    bats: [],
     spawnLog: [],
     hud: { hint: 'start', gameOver: false, blinkVisible: true },
     ...overrides,
@@ -500,6 +502,44 @@ describe('built-in drawers', () => {
         expect(styleOfRect.get(key)).toBe(PALETTE.accent);
       }
     }
+  });
+
+  it('draws each bat from its wing frame on the world layer, glow runs in accent, and the duck pose from its frame', () => {
+    const base = idleState();
+    const bat = (wing: 0 | 1, x: number): Bat => {
+      const sprite = wing === 0 ? Sprites.bat0 : Sprites.bat1;
+      return {
+        id: wing,
+        wing,
+        x,
+        y: 120.4,
+        width: sprite.width,
+        height: sprite.height,
+        hitbox: { x, y: 120.4, width: 1, height: 1 },
+      };
+    };
+    const state = idleState({
+      phase: 'running',
+      dino: { ...base.dino, pose: 'duck', frame: 1 },
+      bats: [bat(0, 300.4), bat(1, 500)],
+      hud: { hint: null, gameOver: false, blinkVisible: true },
+    });
+    const ctx = fakeContext();
+    createLayerStack().run(ctx, state);
+
+    const [, bats, dino] = rectsPerCallback(ctx);
+    expect(dino).toEqual(
+      spriteRects(Sprites.dinoDuck1, state.dino.x, state.dino.y),
+    );
+    expect(bats).toEqual([
+      ...spriteRects(Sprites.bat0, 300, 120),
+      ...spriteRects(Sprites.bat1, 500, 120),
+    ]);
+    expect(Sprites.bat0.glowRuns.length).toBeGreaterThan(0);
+    const accentIndex = ctx.calls.findIndex(
+      (c) => c.op === 'fillStyle' && c.value === PALETTE.accent,
+    );
+    expect(accentIndex).toBeGreaterThanOrEqual(0);
   });
 
   it('draws no obstacle rects when there are no obstacles', () => {

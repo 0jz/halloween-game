@@ -57,6 +57,39 @@ describe('createKeyboard', () => {
   });
 });
 
+describe('createKeyboard ducking', () => {
+  it('ArrowDown gives duckDown once; repeat and held give nothing', () => {
+    const keyboard = createKeyboard();
+    expect(keyboard.keyDown('ArrowDown', true)).toBeNull();
+    expect(keyboard.keyDown('ArrowDown', false)).toBe('duckDown');
+    expect(keyboard.keyDown('ArrowDown', false)).toBeNull();
+  });
+
+  it('keyUp gives duckUp only when ArrowDown was held', () => {
+    const keyboard = createKeyboard();
+    expect(keyboard.keyUp('ArrowDown')).toBeNull();
+    keyboard.keyDown('ArrowDown', false);
+    expect(keyboard.keyUp('ArrowDown')).toBe('duckUp');
+    expect(keyboard.keyUp('ArrowDown')).toBeNull();
+    expect(keyboard.keyDown('ArrowDown', false)).toBe('duckDown');
+  });
+
+  it('keyUp of a primary key returns null', () => {
+    const keyboard = createKeyboard();
+    keyboard.keyDown('Space', false);
+    expect(keyboard.keyUp('Space')).toBeNull();
+  });
+
+  it('reset gives duckUp only when ArrowDown was held', () => {
+    const keyboard = createKeyboard();
+    keyboard.keyDown('Space', false);
+    expect(keyboard.reset()).toBeNull();
+    keyboard.keyDown('ArrowDown', false);
+    expect(keyboard.reset()).toBe('duckUp');
+    expect(keyboard.keyDown('ArrowDown', false)).toBe('duckDown');
+  });
+});
+
 /** A fake window: records listeners and lets a test fire events at them. */
 function fakeTarget() {
   const keyListeners = new Map<string, Set<(event: KeyEventLike) => void>>();

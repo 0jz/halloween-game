@@ -65,6 +65,23 @@ export const FLASH_FRAMES = 10;
  */
 export const PUDDLE = { width: 60, growFrames: 30 } as const;
 
+/**
+ * Bats (spec 002, technical considerations 2.5). Own Rng stream via BAT_SALT;
+ * the first bat is drawn in [BAT_FIRST_TICK, BAT_FIRST_TICK_MAX] (25 to 35 s),
+ * then every BAT_INTERVAL_TICKS (inclusive). The hitbox top sits
+ * BAT_HITBOX_TOP_ABOVE_GROUND px above the ground.
+ */
+export const BAT_SALT = 0xba7ba7;
+export const BAT_FIRST_TICK = 1500;
+export const BAT_FIRST_TICK_MAX = 2100;
+export const BAT_INTERVAL_TICKS = [480, 900] as const;
+export const BAT_HITBOX_TOP_ABOVE_GROUND = 85;
+export const BAT_HITBOX_HEIGHT = 52;
+/** The wing frame toggles every this many ticks. */
+export const BAT_FLAP_TICKS = 8;
+/** Minimum ticks between two bat placements. */
+export const BAT_TO_BAT_TICKS = 300;
+
 /** Top of the ground line, in logical px. */
 export const GROUND_Y = 260;
 

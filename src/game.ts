@@ -10,6 +10,15 @@
 // adds milestones with the score blink (step 8) and the high score rule (step 9).
 
 import { assertNever } from './assert.js';
+import {
+  advanceBats,
+  batRngStart,
+  canPlaceBat,
+  firstBatTick,
+  makeBat,
+  nextBatInterval,
+  widenSpawnX,
+} from './bats.js';
 import { hasCollision } from './collision.js';
 import { createBus } from './events.js';
 import {
@@ -33,6 +42,7 @@ import {
 import { Sprites } from './sprites.js';
 import {
   BLINK_SCHEDULE,
+  CANVAS,
   DINO_X,
   FRAME_CLAMP_MS,
   GROUND_Y,
@@ -41,6 +51,7 @@ import {
   STEP_MS,
 } from './tuning.js';
 import type {
+  Bat,
   Dino,
   DinoPose,
   Game,
@@ -92,6 +103,18 @@ interface RunState {
   readonly nextGroup: number;
   /** Tick of this run's latest milestone; null before the first one. */
   readonly blinkStartedAt: number | null;
+  /** True only while grounded and the DOWN key is held (technical considerations 2.4). */
+  readonly ducking: boolean;
+  /** Last duck intent dispatched since the previous step; last one wins. */
+  readonly pendingDuck: 'duckDown' | 'duckUp' | null;
+  readonly bats: readonly Bat[];
+  /** The bat stream's uint32 state, separate from `rngState`. */
+  readonly batRngState: number;
+  /** Tick at which the next bat is due (retried each tick until placed). */
+  readonly nextBatTick: number;
+  readonly nextBatId: number;
+  /** Tick of the last placed bat; null before the first. */
+  readonly lastBatTick: number | null;
 }
 
 /** What a step needs from `createGame`'s dependencies. */
@@ -142,6 +165,13 @@ function initialRun(deps: GameDeps): RunState {
     nextObstacleId: 0,
     nextGroup: 0,
     blinkStartedAt: null,
+    ducking: false,
+    pendingDuck: null,
+    bats: [],
+    batRngState: 0,
+    nextBatTick: Number.POSITIVE_INFINITY,
+    nextBatId: 0,
+    lastBatTick: null,
   };
 }
 
@@ -152,6 +182,7 @@ function initialRun(deps: GameDeps): RunState {
  */
 function freshRun(seed: number, previous: RunState): RunState {
   const [nextSpawnX, rngState] = firstSpawnX(seed >>> 0);
+  const [nextBatTick, batRngState] = firstBatTick(batRngStart(seed));
   return {
     ...previous,
     phase: 'running',
@@ -169,6 +200,13 @@ function freshRun(seed: number, previous: RunState): RunState {
     nextObstacleId: 0,
     nextGroup: 0,
     blinkStartedAt: null,
+    ducking: false,
+    pendingDuck: null,
+    bats: [],
+    batRngState,
+    nextBatTick,
+    nextBatId: 0,
+    lastBatTick: null,
   };
 }
 
@@ -243,9 +281,30 @@ function isBlinkVisible(run: RunState): boolean {
 }
 
 function projectDino(run: RunState): Dino {
-  // Every dino sprite (stand, run, hit) has the same size and hitbox, so the
-  // geometry comes from the standing one; the renderer picks the drawn sprite
-  // from `pose` and `frame`.
+  if (run.phase === 'running' && run.ducking) {
+    // Physics `y` is unchanged; the duck sprite is shorter with its bottom on
+    // the same line, so only the projected `y` and hitbox move.
+    const duck = run.dino.frame === 0 ? Sprites.dinoDuck0 : Sprites.dinoDuck1;
+    const y = run.dino.y + (Sprites.dinoStand.height - duck.height);
+    return {
+      x: DINO_X,
+      y,
+      width: duck.width,
+      height: duck.height,
+      onGround: run.dino.onGround,
+      pose: 'duck',
+      frame: run.dino.frame,
+      hitbox: {
+        x: DINO_X + duck.hitbox.x,
+        y: y + duck.hitbox.y,
+        width: duck.hitbox.width,
+        height: duck.hitbox.height,
+      },
+    };
+  }
+  // The stand, run and hit sprites share one size and hitbox, so the geometry
+  // comes from the standing one; the renderer picks the drawn sprite from
+  // `pose` and `frame`.
   const sprite = Sprites.dinoStand;
   const { x: hx, y: hy, width: hw, height: hh } = sprite.hitbox;
   return {
@@ -272,6 +331,7 @@ function project(run: RunState): GameState {
     hi: run.hi,
     dino: projectDino(run),
     obstacles: run.obstacles,
+    bats: run.bats,
     spawnLog: run.spawnLog,
     hud: {
       hint: hintFor(run.phase),
@@ -365,6 +425,41 @@ function stepObstacles(
 }
 
 /**
+ * Bat steps (after the pumpkin spawn): scroll and drop bats, then place the
+ * due bat at the right edge when the space allows (otherwise retry next tick),
+ * widen the next pumpkin x, and draw the next due tick from the bat stream.
+ */
+function stepBats(
+  run: RunState,
+  tick: number,
+  speed: number,
+  events: GameEvent[],
+): RunState {
+  const bats = advanceBats(run.bats, speed, tick);
+  const request = {
+    tick,
+    speed,
+    obstacles: run.obstacles,
+    lastBatTick: run.lastBatTick ?? undefined,
+  };
+  if (tick < run.nextBatTick || !canPlaceBat(request)) {
+    return { ...run, bats };
+  }
+  const bat = makeBat(run.nextBatId, CANVAS.width, tick);
+  const [interval, batRngState] = nextBatInterval(run.batRngState);
+  events.push({ type: 'batSpawn', bat });
+  return {
+    ...run,
+    bats: [...bats, bat],
+    batRngState,
+    nextBatTick: tick + interval,
+    nextBatId: run.nextBatId + 1,
+    lastBatTick: tick,
+    nextSpawnX: widenSpawnX(run.nextSpawnX, bat, tick, speed),
+  };
+}
+
+/**
  * Step 9: on a hit the run ends on this same step. A score above `hi ?? 0` is
  * saved once and becomes `hi`; `die.highScore` is `hi` after the death (0 while
  * it is still null) and `isNewHighScore` is true exactly when it was saved.
@@ -374,7 +469,7 @@ function stepCollision(
   events: GameEvent[],
   deps: StepDeps,
 ): RunState {
-  if (!hasCollision(projectDino(run), run.obstacles)) {
+  if (!hasCollision(projectDino(run), [...run.obstacles, ...run.bats])) {
     return run;
   }
   const isNewHighScore = beatsHighScore(run.score, run.hi);
@@ -407,9 +502,22 @@ function stepRunning(
     events.push({ type: 'speedChange', speed });
   }
 
-  // Step 4: `primary` on the ground is a jump; in the air it is ignored.
+  // Step 4: the pending duck change (grounded only), then the jump, which
+  // clears `ducking`; `primary` in the air is ignored.
   let body = run.dino;
+  let ducking = run.ducking;
+  if (run.pendingDuck !== null && isOnGround(body)) {
+    const wantsDuck = run.pendingDuck === 'duckDown';
+    if (wantsDuck !== ducking) {
+      ducking = wantsDuck;
+      events.push({ type: wantsDuck ? 'duckStart' : 'duckEnd' });
+    }
+  }
   if (intent === 'primary' && isOnGround(body)) {
+    if (ducking) {
+      ducking = false;
+      events.push({ type: 'duckEnd' });
+    }
     body = startJump(body);
     events.push({ type: 'jump' });
   }
@@ -422,7 +530,12 @@ function stepRunning(
   }
 
   // Steps 6 and 7: obstacles move, leave, and spawn.
-  const spawned = stepObstacles(run, tick, speed, events);
+  const spawned = stepBats(
+    stepObstacles(run, tick, speed, events),
+    tick,
+    speed,
+    events,
+  );
 
   // Step 8: score, capped at MAX_SCORE; crossing a multiple of
   // MILESTONE_EVERY restarts the blink and emits `milestone`.
@@ -441,6 +554,8 @@ function stepRunning(
     distance,
     score,
     dino: body,
+    ducking,
+    pendingDuck: null,
     blinkStartedAt: milestone === null ? run.blinkStartedAt : tick,
   };
 
@@ -539,8 +654,14 @@ export function createGame(deps: GameDeps): Game {
     },
     frame,
     dispatch: (intent) => {
-      // Step 4: `primary` in the air is ignored.
-      if (!isAirborne(run)) queue.push(intent);
+      // Step 4: input in the air, idle or dead is ignored; duck intents
+      // bypass the primary queue (last wins).
+      if (isAirborne(run)) return;
+      if (intent === 'primary') {
+        queue.push(intent);
+      } else if (run.phase === 'running') {
+        run = { ...run, pendingDuck: intent };
+      }
     },
     state: () => structuredClone(project(run)),
     view: () => project(run),

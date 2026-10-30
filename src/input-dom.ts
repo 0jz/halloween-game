@@ -1,7 +1,7 @@
 // DOM keyboard adapter (technical considerations 2.2, risk "Keyboard focus").
 // Listens on the window so the canvas needs no focus, and feeds the pure reducer.
 
-import { PRIMARY_CODES, type Keyboard } from './input.js';
+import { DUCK_CODE, PRIMARY_CODES, type Keyboard } from './input.js';
 import type { Intent } from './types.js';
 
 /** The slice of `KeyboardEvent` the adapter reads. */
@@ -38,22 +38,27 @@ export function attachKeyboard(
   keyboard: Keyboard,
   onIntent: (intent: Intent) => void,
 ): { dispose(): void } {
-  // Space and ArrowUp never scroll the page, whatever the reducer decides.
-  const onKeyDown = (event: KeyEventLike): void => {
-    if (PRIMARY_CODES.has(event.code)) event.preventDefault();
-    const intent = keyboard.keyDown(event.code, event.repeat);
+  // Space and the arrows never scroll the page, whatever the reducer decides.
+  const prevents = (code: string): boolean =>
+    PRIMARY_CODES.has(code) || code === DUCK_CODE;
+  const forward = (intent: Intent | null): void => {
     if (intent !== null) onIntent(intent);
   };
-  const onKeyUp = (event: KeyEventLike): void => {
-    if (PRIMARY_CODES.has(event.code)) event.preventDefault();
-    keyboard.keyUp(event.code);
+  const onKeyDown = (event: KeyEventLike): void => {
+    if (prevents(event.code)) event.preventDefault();
+    forward(keyboard.keyDown(event.code, event.repeat));
   };
-  // A keyup during alt-tab is never delivered, so forget held keys on blur/hide.
+  const onKeyUp = (event: KeyEventLike): void => {
+    if (prevents(event.code)) event.preventDefault();
+    forward(keyboard.keyUp(event.code));
+  };
+  // A keyup during alt-tab is never delivered, so release held keys on blur/hide
+  // (a held duck key yields a duckUp).
   const onBlur = (): void => {
-    keyboard.reset();
+    forward(keyboard.reset());
   };
   const onVisibility = (): void => {
-    if (target.document.visibilityState === 'hidden') keyboard.reset();
+    if (target.document.visibilityState === 'hidden') forward(keyboard.reset());
   };
 
   target.addEventListener('keydown', onKeyDown);

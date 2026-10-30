@@ -1,4 +1,5 @@
 // @spec: 001-core-game
+// @spec: 002-halloween-edition
 // @regression
 //
 // Feature-level acceptance tests for the criteria of functional-spec.md that
@@ -14,15 +15,21 @@ import {
   type KeyboardTarget,
   type KeyEventLike,
 } from '../src/input-dom.js';
-import { JUMP_DURATION_TICKS, MAX_GROUP_SIZE } from '../src/tuning.js';
-import type { Game, GameState, Obstacle } from '../src/types.js';
-import { collect, makeGame, pressPrimary, runUntil } from './helpers.js';
+import { MAX_GROUP_SIZE } from '../src/tuning.js';
+import {
+  collect,
+  duckDown,
+  duckUp,
+  makeGame,
+  playBot,
+  pressPrimary,
+  runUntil,
+} from './helpers.js';
 
 /** Keys a player might press that are neither SPACE nor the UP arrow. */
 const OTHER_KEYS = [
   'KeyA',
   'Enter',
-  'ArrowDown',
   'ArrowLeft',
   'ArrowRight',
   'Escape',
@@ -83,53 +90,7 @@ function keyboardGame(seed: number): {
   return { made, press: win.press };
 }
 
-/** The obstacles of the nearest group whose trailing edge is still ahead of the dino's back. */
-function nextGroup(state: GameState): readonly Obstacle[] {
-  const back = state.dino.hitbox.x;
-  const ahead = state.obstacles.filter(
-    (o) => o.hitbox.x + o.hitbox.width > back,
-  );
-  const first = ahead[0];
-  if (first === undefined) return [];
-  return ahead.filter((o) => o.group === first.group);
-}
-
-/**
- * Plays a run with one well-timed jump per group: it presses once, when the
- * middle of the group is half a jump's travel away from the middle of the
- * dino, so the dino is at the top of its jump while above the group. Returns
- * the groups it jumped (by group number and size) and the run's jump count.
- */
-function playWellTimed(
-  game: Game,
-  ticks: number,
-  onTick?: (state: GameState) => void,
-): { jumped: Map<number, number>; jumps: number } {
-  const jumpEvents = collect(game, 'jump');
-  const jumped = new Map<number, number>();
-  while (game.view().tick < ticks && game.view().phase === 'running') {
-    const s = game.view();
-    const group = nextGroup(s);
-    const lead = group[0];
-    const tail = group.at(-1);
-    if (lead !== undefined && tail !== undefined && !jumped.has(lead.group)) {
-      const groupMid = (lead.hitbox.x + tail.hitbox.x + tail.hitbox.width) / 2;
-      const dinoMid = s.dino.hitbox.x + s.dino.hitbox.width / 2;
-      if (
-        s.dino.onGround &&
-        groupMid - dinoMid <= (s.speed * JUMP_DURATION_TICKS) / 2
-      ) {
-        game.dispatch('primary');
-        jumped.set(lead.group, group.length);
-      }
-    }
-    game.tick();
-    onTick?.(game.view());
-  }
-  return { jumped, jumps: jumpEvents.length };
-}
-
-describe('@spec: 001-core-game @regression feature acceptance', () => {
+describe('@spec: 001-core-game @spec: 002-halloween-edition @regression feature acceptance', () => {
   it('@regression 2.1: other keys on the start screen change nothing; SPACE still starts', () => {
     const { made, press } = keyboardGame(42);
     const { game, randomSeed } = made;
@@ -188,7 +149,9 @@ describe('@spec: 001-core-game @regression feature acceptance', () => {
       const deaths = collect(game, 'die');
       pressPrimary(game);
 
-      const { jumped, jumps } = playWellTimed(game, PLAY_TICKS);
+      // Bats arrive from BAT_FIRST_TICK; the bot ducks them so the pumpkin
+      // rule is still what is under test.
+      const { jumped, jumps } = playBot(game, PLAY_TICKS, { duckBats: true });
 
       const label = `seed ${String(seed)}`;
       expect(deaths, label).toEqual([]);
@@ -201,5 +164,57 @@ describe('@spec: 001-core-game @regression feature acceptance', () => {
       }
     }
     expect(fullGroupsCleared).toBeGreaterThan(0);
+  });
+
+  it('@regression 2.1 (duck): ArrowDown on the start screen ducks nothing and does not start; SPACE still starts', () => {
+    const { made, press } = keyboardGame(42);
+    const { game } = made;
+    const before = game.state();
+    const starts = collect(game, 'start');
+    const ducks = collect(game, 'duckStart');
+
+    press('ArrowDown');
+    game.tick();
+
+    expect(game.state()).toEqual(before);
+    expect(starts).toEqual([]);
+    expect(ducks).toEqual([]);
+    press('Space');
+    game.tick();
+    expect(game.state().phase).toBe('running');
+  });
+
+  it('@regression 2.7 (duck): ArrowDown on the game-over screen does not restart; UP still does', () => {
+    const { made, press } = keyboardGame(42);
+    const { game } = made;
+    press('Space');
+    game.tick();
+    runUntil(game, (s) => s.phase === 'dead', 1200);
+    const before = game.state();
+    const restarts = collect(game, 'restart');
+
+    press('ArrowDown');
+    game.tick();
+
+    expect(game.state()).toEqual(before);
+    expect(restarts).toEqual([]);
+    press('ArrowUp');
+    game.tick();
+    expect(game.state().phase).toBe('running');
+  });
+
+  it('@regression duck: holding ArrowDown on the ground ducks, releasing stands the dino up', () => {
+    const { made } = keyboardGame(42);
+    const { game } = made;
+    pressPrimary(game);
+    const ducks = collect(game, 'duckStart');
+    const ends = collect(game, 'duckEnd');
+
+    duckDown(game);
+    expect(game.state().dino.pose).toBe('duck');
+    expect(ducks).toHaveLength(1);
+    duckUp(game);
+    expect(game.state().dino.pose).not.toBe('duck');
+    expect(ends).toHaveLength(1);
   });
 });

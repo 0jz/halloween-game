@@ -408,6 +408,8 @@ describe('2.3 cacti', () => {
     for (const seed of [1, 42, 2024]) {
       const game = startLongRun(seed);
       const spawns = collect(game, 'spawn');
+      const bats = collect(game, 'batSpawn');
+      let batsSeen = 0;
       let trailing: number | null = null;
       let gaps = 0;
       let gapsAtMax = 0;
@@ -428,12 +430,17 @@ describe('2.3 cacti', () => {
         if (trailing !== null) {
           const gap = lead.x - trailing;
           expect(gap).toBeGreaterThanOrEqual(minGapPx(speed));
-          expect(gap).toBeLessThanOrEqual(MAX_GAP_FACTOR * minGapPx(speed));
+          // A bat placed since the last group widens this gap on purpose
+          // (spec 002), so only the lower bound holds for it.
+          if (bats.length === batsSeen) {
+            expect(gap).toBeLessThanOrEqual(MAX_GAP_FACTOR * minGapPx(speed));
+          }
           gaps += 1;
           if (speed === MAX_SPEED) {
             gapsAtMax += 1;
           }
         }
+        batsSeen = bats.length;
         trailing = Math.max(...spawned.map((o) => o.x + o.width));
       }
       expect(gaps).toBeGreaterThan(10);

@@ -4,7 +4,7 @@
 // b.x, or the same on y) do NOT intersect. A touching edge has zero overlapping
 // area, so there is still no shared pixel, which keeps near misses forgiving.
 
-import type { Dino, Obstacle, Rect } from './types.js';
+import type { Dino, Rect } from './types.js';
 
 /** True when `a` and `b` share a region of positive area (touching edges do not count). */
 export function intersects(a: Rect, b: Rect): boolean {
@@ -24,7 +24,7 @@ export function intersects(a: Rect, b: Rect): boolean {
  */
 export function hasCollision(
   dino: Dino,
-  obstacles: readonly Obstacle[],
+  obstacles: readonly { readonly hitbox: Rect }[],
 ): boolean {
   return obstacles.some((obstacle) => intersects(dino.hitbox, obstacle.hitbox));
 }

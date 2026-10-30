@@ -9,13 +9,19 @@ import type { Intent } from './types.js';
  */
 export const PRIMARY_CODES: ReadonlySet<string> = new Set(['Space', 'ArrowUp']);
 
+/** The duck key. The DOM adapter also stops its default action. */
+export const DUCK_CODE = 'ArrowDown';
+
 export interface Keyboard {
-  /** `'primary'` on a fresh, non-repeat press of Space or ArrowUp; otherwise `null`. */
+  /**
+   * `'primary'` on a fresh, non-repeat press of Space or ArrowUp, `'duckDown'`
+   * on a fresh, non-repeat press of ArrowDown; otherwise `null`.
+   */
   keyDown(code: string, repeat: boolean): Intent | null;
-  /** Releases `code`, so its next press counts again. */
-  keyUp(code: string): void;
-  /** Releases every held key (window blur, page hidden). */
-  reset(): void;
+  /** Releases `code`; `'duckUp'` only when ArrowDown was held, else `null`. */
+  keyUp(code: string): Intent | null;
+  /** Releases every held key (blur, page hidden); `'duckUp'` if ArrowDown was held. */
+  reset(): Intent | null;
 }
 
 export function createKeyboard(): Keyboard {
@@ -23,15 +29,21 @@ export function createKeyboard(): Keyboard {
   const held = new Set<string>();
   return {
     keyDown(code, repeat) {
-      if (!PRIMARY_CODES.has(code) || repeat || held.has(code)) return null;
+      const isDuck = code === DUCK_CODE;
+      if (!(isDuck || PRIMARY_CODES.has(code)) || repeat || held.has(code)) {
+        return null;
+      }
       held.add(code);
-      return 'primary';
+      return isDuck ? 'duckDown' : 'primary';
     },
     keyUp(code) {
-      held.delete(code);
+      const wasHeld = held.delete(code);
+      return wasHeld && code === DUCK_CODE ? 'duckUp' : null;
     },
     reset() {
+      const wasDucking = held.has(DUCK_CODE);
       held.clear();
+      return wasDucking ? 'duckUp' : null;
     },
   };
 }
