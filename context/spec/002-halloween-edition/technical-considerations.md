@@ -1,7 +1,7 @@
 # Technical Specification: Halloween Edition
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Nikola, with the `typescript-canvas-game` specialist
 
 ---
